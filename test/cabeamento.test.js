@@ -37,7 +37,7 @@ test('"Livre" do Calculator (enche a porta) = uma corrente só, cortada a cada N
   assert.deepEqual(pl.dados.portas[1].caminho[0], [4, 1]);              // continua no meio da 5ª coluna (que sobe)
 });
 
-test('projeto técnico no modelo da Syngenta: AC com rack, Sinal com controladoras e processadora, carimbo', () => {
+test('projeto técnico: desenho da Syngenta (AC com rack, Sinal com processadora) na prancha do Calculator', () => {
   const telas = [
     { id: 'le', nome: 'Lateral esq.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 },
     { id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 18, altura_m: 3.5 },
@@ -47,15 +47,17 @@ test('projeto técnico no modelo da Syngenta: AC com rack, Sinal com controlador
   const fs = Cab.folhasTecnicas(ps, meta, {});
   assert.deepEqual(fs.map(f => f.tipo), ['ac', 'sinal']);
   const textos = f => f.prims.filter(p => p.t === 'text').map(p => p.txt);
-  assert.ok(textos(fs[0]).includes('Plenária'));
+  assert.ok(textos(fs[0]).includes('Cabeamento de AC · Plenária'));
   assert.ok(textos(fs[0]).includes('2 Painéis de Led (Lateral esq. e dir.) – 4,5 x 2,5 m + Painel de Led (Central) – 18 x 3,5 m'));
   assert.equal(textos(fs[0]).filter(t => /^Rack [12] · 9 saídas · 4 réguas$/.test(t)).length, 2);   // 2 racks de 4 réguas
-  assert.ok(textos(fs[0]).includes('Cabeamento de AC'));
+  assert.ok(textos(fs[0]).includes('Plenária'));                                  // Ambiente/Sala no carimbo
   assert.ok(textos(fs[1]).includes('VX1000'));                                           // a processadora
-  assert.ok(textos(fs[1]).includes('Cabeamento de Sinal'));
-  assert.ok(textos(fs[1]).includes('11/05/2026'));                                       // data do carimbo
-  assert.ok(textos(fs[1]).includes('02'));                                               // número da folha
-  assert.match(Cab.svg(fs[1]), /^<svg [^>]*viewBox="0 0 406.4 228.6"/);
+  assert.ok(textos(fs[1]).includes('Cabeamento de Sinal · Plenária'));
+  assert.ok(textos(fs[1]).includes('11/05/26'));                                         // data de emissão, como no Calculator
+  assert.ok(textos(fs[1]).includes('2/2'));                                              // folha
+  assert.ok(Math.round(1000 / fs[0].escala) > 0);                                        // em escala (1:N no carimbo)
+  assert.match(Cab.svg(fs[1]), /^<svg [^>]*viewBox="0 0 420 297"/);                     // A3, o padrão do Calculator
+  assert.equal(Cab.folhasTecnicas(ps, meta, { formato: '169' })[0].formato.w, 528);      // ou 16:9
   // sala pequena (Foyer 4 × 3 m, 1 régua): uma folha só, "AC e Sinal"; dá para pedir separadas
   const foyer = M.planoSala([{ id: 'f', nome: 'Foyer', painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 3 }], catalogoInicial(), {});
   assert.deepEqual(Cab.folhasTecnicas(foyer, { sala: 'Foyer' }).map(f => f.tipo), ['ambos']);

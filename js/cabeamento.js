@@ -37,7 +37,7 @@ export const CONTROLADORAS = {
   'taurus-tb1': { nome: 'Taurus TB1', portas: 1, px: 650000 }
 };
 /* Da sala: racks repartidos na sala inteira ou por tela, a processadora e as folhas (auto | separadas | juntas) */
-export const SALA_PADRAO = { racks: 'sala', processadora: '', folhas: 'auto' };
+export const SALA_PADRAO = { racks: 'sala', processadora: '', folhas: 'auto', folha: 'a3' };
 
 export function configTela(cfg) { return Object.assign({}, PROJETO_PADRAO, cfg || {}); }
 
@@ -349,22 +349,41 @@ function espalhar(caixas, w, xMin, xMax) {
 }
 
 /* ============================================================
- * Projeto técnico de cabeamento — o modelo da Projetech (Syngenta, OS 32465)
- * A sala inteira numa folha 16:9, título (a sala) e subtítulo (as telas e as medidas):
+ * Projeto técnico de cabeamento
+ * O desenho é o do modelo da Projetech (projeto da Syngenta, OS 32465) e a PRANCHA é a do Projetech
+ * Calculator, igual (moldura, carimbo de dados | logo | identificação | folha; A3, 16:9 ou A4):
  *  - AC: cada circuito com a sua cor e o caminho do powercon; os circuitos descem até a régua
  *    Steck/Powercon (triângulo azul) e as réguas até o rack de energia da sala;
  *  - Sinal: cada porta com a sua cor, a etiqueta Novastar (C · P · RV · A · WH) em cada gabinete; as portas
  *    de cada tela descem até a controladora dela e as controladoras até a processadora;
  *  - sala pequena (1 tela, 1 régua): uma folha só, "AC e Sinal", como o Foyer.
- * Carimbo do modelo: Nome do Projeto, Local, Tipo de Projeto, Engenheiro(a) Responsável, Data, Escala, OS,
- * Cliente e o número da folha.
+ * As telas ficam lado a lado na ordem da sala; com posição (tela.pos.x, em metros, do editor) ficam onde
+ * foram postas.
  * ============================================================ */
 
-export const FOLHA_TECNICA = { w: 406.4, h: 228.6 };   // 16:9, como os projetos da Projetech
+export const FORMATOS = { a3: { w: 420, h: 297, nome: 'A3' }, '169': { w: 528, h: 297, nome: '16:9' }, a4: { w: 297, h: 210, nome: 'A4' } };
 // a ordem de cores do projeto da Syngenta: ciano, rosa, verde, azul, amarelo, laranja, salmão, azul claro…
 export const CORES_PORTA = ['#5fd8ca', '#e290ea', '#7fd17f', '#8b8ff2', '#f2e35c', '#f3a862', '#f29191', '#90baf2', '#c9baf6', '#f8c9d7', '#dceef8', '#a6d873'];
 export const TIPOS_TECNICO = { ac: 'Cabeamento de AC', sinal: 'Cabeamento de Sinal', ambos: 'Cabeamento de AC e Sinal' };
 const n2t = v => String(+(+v).toFixed(2)).replace('.', ',');
+const fmtNum = (n, casas = 0) => { const v = (+n || 0).toFixed(casas).split('.'); return v[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (v[1] ? ',' + v[1] : ''); };
+const dataCurta = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim()); return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : String(iso || ''); };
+
+/* Onde cada tela fica na sala, em metros a partir da esquerda: a posição que o editor gravou (tela.pos.x)
+ * ou, sem ela, lado a lado depois da anterior, com um vão. */
+export function posicoesDaSala(ps) {
+  const its = ps.telas.filter(it => it.pl);
+  const media = its.length ? its.reduce((a, it) => a + it.pl.largura_m, 0) / its.length : 0;
+  const vao = its.length > 1 ? Math.min(3, Math.max(0.6, media * 0.3)) : 0;
+  const out = new Map();
+  let cursor = 0;
+  for (const it of its) {
+    const p = it.tela && it.tela.pos, x = p && Number.isFinite(+p.x) ? +p.x : cursor;
+    out.set(it, x);
+    cursor = Math.max(cursor, x + it.pl.largura_m + vao);
+  }
+  return out;
+}
 
 function gradeTecnica(P, g, modo) {
   const pl = g.pl, sinal = modo !== 'ac';
@@ -373,8 +392,10 @@ function gradeTecnica(P, g, modo) {
   grupos.forEach((gp, i) => gp.caminho.forEach(([c, r]) => cor.set(c + ',' + r, i)));
   const cw = g.w / pl.colunas, ch = g.h / pl.linhas, m = Math.min(cw, ch);
   const sw = Math.max(0.05, m * 0.018);
-  for (let c = 0; c < pl.colunas; c++) for (let r = 0; r < pl.linhas; r++)
-    P.push({ t: 'rect', x: g.x0 + c * cw, y: g.y0 + r * ch, w: cw, h: ch, fill: CORES_PORTA[(cor.get(c + ',' + r) || 0) % CORES_PORTA.length], stroke: '#ffffff', sw });
+  for (let c = 0; c < pl.colunas; c++) for (let r = 0; r < pl.linhas; r++) {
+    const i = cor.get(c + ',' + r);
+    P.push({ t: 'rect', x: g.x0 + c * cw, y: g.y0 + r * ch, w: cw, h: ch, fill: i == null ? '#d1d5db' : CORES_PORTA[i % CORES_PORTA.length], stroke: '#ffffff', sw });
+  }
   const cx = c => g.x0 + (c + 0.5) * cw, cy = r => g.y0 + (r + 0.5) * ch;
   const pt = m / 7.6 / MM_PT;
   if (sinal && pt >= 2.1) {
@@ -405,50 +426,49 @@ function gradeTecnica(P, g, modo) {
   P.push({ t: 'rect', x: g.x0, y: g.y0, w: g.w, h: g.h, stroke: '#64748b', sw: 0.2 });
 }
 
-function rackTecnico(P, x, y, w, h, tipo, rotulo) {
+function rackTecnico(P, x, y, w, h, tipo, rotulo, k) {
   const nS = RACKS[tipo] || 9, colsT = nS === 12 ? 4 : 3, linT = Math.ceil(nS / colsT);
-  P.push({ t: 'rect', x: x - w / 2, y, w, h, fill: '#3f4652', stroke: '#111827', sw: 0.35, r: 1.2 });
+  P.push({ t: 'rect', x: x - w / 2, y, w, h, fill: '#3f4652', stroke: '#111827', sw: 0.35 * k, r: 1.2 * k });
   const tw = w * 0.8 / colsT, th = h * 0.78 / linT;
-  for (let k = 0; k < nS; k++) {
-    const tx = x - w * 0.4 + (k % colsT) * tw, ty = y + h * 0.11 + Math.floor(k / colsT) * th;
-    P.push({ t: 'rect', x: tx + tw * 0.08, y: ty + th * 0.1, w: tw * 0.55, h: th * 0.78, fill: '#3b82f6', stroke: '#dbeafe', sw: 0.12, r: 0.5 });
+  for (let i = 0; i < nS; i++) {
+    const tx = x - w * 0.4 + (i % colsT) * tw, ty = y + h * 0.11 + Math.floor(i / colsT) * th;
+    P.push({ t: 'rect', x: tx + tw * 0.08, y: ty + th * 0.1, w: tw * 0.55, h: th * 0.78, fill: '#3b82f6', stroke: '#dbeafe', sw: 0.12 * k, r: 0.5 * k });
     P.push({ t: 'circle', x: tx + tw * 0.355, y: ty + th * 0.49, r: Math.min(tw, th) * 0.16, fill: '#1e3a8a' });
-    P.push({ t: 'rect', x: tx + tw * 0.7, y: ty + th * 0.3, w: tw * 0.2, h: th * 0.4, fill: '#ef4444', r: 0.2 });
+    P.push({ t: 'rect', x: tx + tw * 0.7, y: ty + th * 0.3, w: tw * 0.2, h: th * 0.4, fill: '#ef4444', r: 0.2 * k });
   }
-  P.push({ t: 'rect', x: x - w / 2 + 1, y: y + h, w: 1.4, h: 1.6, fill: '#111827' });
-  P.push({ t: 'rect', x: x + w / 2 - 2.4, y: y + h, w: 1.4, h: 1.6, fill: '#111827' });
-  P.push({ t: 'text', x, y: y + h + 5, txt: rotulo, size: 6.5, align: 'center', color: '#111827' });
+  P.push({ t: 'rect', x: x - w / 2 + 1 * k, y: y + h, w: 1.4 * k, h: 1.6 * k, fill: '#111827' });
+  P.push({ t: 'rect', x: x + w / 2 - 2.4 * k, y: y + h, w: 1.4 * k, h: 1.6 * k, fill: '#111827' });
+  P.push({ t: 'text', x, y: y + h + 5 * k, txt: rotulo, size: 6.5 * k, align: 'center', color: '#111827' });
 }
 
-function salaTecnica(P, ps, area, modo) {
+/* desenha a sala na área; k = tamanho dos aparelhos e letras (o U da prancha). Devolve a escala (mm por m). */
+function salaTecnica(P, ps, area, modo, k) {
   const its = ps.telas.map((it, ti) => ({ it, ti })).filter(o => o.it.pl);
-  if (!its.length) return;
+  if (!its.length) return 0;
   const comAC = modo !== 'sinal', comSinal = modo === 'sinal';
-  const hBaixo = Math.min(area.h * 0.46, modo === 'ambos' ? 44 : 58);
-  const largs = its.map(o => o.it.pl.largura_m), alts = its.map(o => o.it.pl.altura_m);
-  const media = largs.reduce((a, b) => a + b, 0) / largs.length;
-  const gapM = its.length > 1 ? Math.min(3, Math.max(0.6, media * 0.3)) : 0;
-  const totW = largs.reduce((a, b) => a + b, 0) + gapM * (its.length - 1);
-  const maxH = Math.max(...alts);
-  const hNome = its.length > 1 ? 5 : 0;
+  const hBaixo = Math.min(area.h * 0.46, (modo === 'ambos' ? 44 : 58) * k);
+  const pos = posicoesDaSala(ps);
+  const x0m = Math.min(...its.map(o => pos.get(o.it)));
+  const x1m = Math.max(...its.map(o => pos.get(o.it) + o.it.pl.largura_m));
+  const totW = Math.max(0.5, x1m - x0m);
+  const maxH = Math.max(...its.map(o => o.it.pl.altura_m));
+  const hNome = its.length > 1 ? 5 * k : 0;
   const s = Math.min(area.w / totW, (area.h - hBaixo - hNome) / maxH);
   const yTop = area.y + Math.max(0, (area.h - (hNome + maxH * s + hBaixo)) / 2);
   const yBase = yTop + hNome + maxH * s;
-  let x = area.x + (area.w - totW * s) / 2;
+  const xIni = area.x + (area.w - totW * s) / 2;
   const geo = its.map(({ it, ti }) => {
-    const w = it.pl.largura_m * s, h = it.pl.altura_m * s;
-    const g = { it, ti, pl: it.pl, x0: x, y0: yBase - h, w, h, xm: x + w / 2 };
-    x += w + gapM * s;
-    return g;
+    const w = it.pl.largura_m * s, h = it.pl.altura_m * s, x = xIni + (pos.get(it) - x0m) * s;
+    return { it, ti, pl: it.pl, x0: x, y0: yBase - h, w, h, xm: x + w / 2 };
   });
   for (const g of geo) {
     gradeTecnica(P, g, modo);
-    if (geo.length > 1) P.push({ t: 'text', x: g.xm, y: g.y0 - 1.6, txt: corta(`${g.it.nome || 'Tela'} · ${n2t(g.pl.largura_m)} x ${n2t(g.pl.altura_m)} m`, Math.max(g.w + gapM * s * 0.8, 20), 6.5, true), size: 6.5, bold: true, align: 'center', color: '#111827' });
+    if (geo.length > 1) P.push({ t: 'text', x: g.xm, y: g.y0 - 1.6 * k, txt: corta(`${g.it.nome || 'Tela'} · ${n2t(g.pl.largura_m)} x ${n2t(g.pl.altura_m)} m`, Math.max(g.w * 1.2, 24 * k), 6.5 * k, true), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
   }
   const xMin = area.x, xMax = area.x + area.w;
   if (comAC) {
-    const yBus = yBase + Math.min(8, hBaixo * 0.15);
-    const rackH = Math.min(15, hBaixo * 0.3), rackW = Math.min(24, area.w / Math.max(1, ps.racks.length * 1.6));
+    const yBus = yBase + Math.min(8 * k, hBaixo * 0.15);
+    const rackH = Math.min(15 * k, hBaixo * 0.3), rackW = Math.min(24 * k, area.w / Math.max(1, ps.racks.length * 1.6));
     const yR = yBase + hBaixo * 0.42;
     const reg = new Map();
     for (const g of geo) {
@@ -456,8 +476,8 @@ function salaTecnica(P, ps, area, modo) {
       for (const r of en.reguas) {
         const xs = saidas(g, r.circuitos.map(n => en.circuitos[n - 1].caminho));
         const xm = (Math.min(...xs) + Math.max(...xs)) / 2;
-        xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111827', sw: 0.3 }));
-        if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111827', sw: 0.3 });
+        xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111827', sw: 0.3 * k }));
+        if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111827', sw: 0.3 * k });
         reg.set(g.ti + '.' + r.n, { xm });
       }
     }
@@ -472,58 +492,59 @@ function salaTecnica(P, ps, area, modo) {
         const esq = rk.x - rackW / 2, dir = rk.x + rackW / 2;
         const yE = yR + rackH * (0.22 + 0.56 * (mm > 1 ? j / (mm - 1) : 0.5));
         const pts = r.xm < esq ? [[r.xm, yBus], [r.xm, yE], [esq, yE]] : r.xm > dir ? [[r.xm, yBus], [r.xm, yE], [dir, yE]] : [[r.xm, yBus], [r.xm, yR]];
-        P.push({ t: 'poly', pts, stroke: '#111827', sw: 0.55 });
-        P.push({ t: 'tri', fill: '#2563eb', pts: [[r.xm - 1.1, yBus - 0.2], [r.xm + 1.1, yBus - 0.2], [r.xm, yBus + 1.54]] });
+        P.push({ t: 'poly', pts, stroke: '#111827', sw: 0.55 * k });
+        P.push({ t: 'tri', fill: '#2563eb', pts: [[r.xm - 1.1 * k, yBus - 0.2 * k], [r.xm + 1.1 * k, yBus - 0.2 * k], [r.xm, yBus + 1.54 * k]] });
       });
       const nS = RACKS[rk.tipo] || 9;
-      rackTecnico(P, rk.x, yR, rackW, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`);
+      rackTecnico(P, rk.x, yR, rackW, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`, k);
     }
   }
   if (comSinal) {
-    const yBusS = yBase + Math.min(7, hBaixo * 0.13);
-    const cH = 4.6, cW = Math.min(30, Math.max(18, area.w / Math.max(1, geo.length * 2.2)));
+    const yBusS = yBase + Math.min(7 * k, hBaixo * 0.13);
+    const cH = 4.6 * k, cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, geo.length * 2.2)));
     const yC = yBase + hBaixo * 0.3;
     const ctrls = geo.map(g => {
       const xs = saidas(g, g.pl.dados.portas.map(p => p.caminho));
-      xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBusS, stroke: '#111827', sw: 0.25 }));
+      xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBusS, stroke: '#111827', sw: 0.25 * k }));
       const a = Math.min(...xs), b = Math.max(...xs);
-      if (xs.length > 1) P.push({ t: 'line', x1: a, y1: yBusS, x2: b, y2: yBusS, stroke: '#111827', sw: 0.25 });
+      if (xs.length > 1) P.push({ t: 'line', x1: a, y1: yBusS, x2: b, y2: yBusS, stroke: '#111827', sw: 0.25 * k });
       return { g, x: g.xm, xb: (a + b) / 2 };
     });
     espalhar(ctrls, cW, xMin, xMax);
     for (const c of ctrls) {
       const it = c.g.it, nome = (CONTROLADORAS[it.ctrl.item] || {}).nome || 'Controladora';
-      P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 });
+      P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
       // a controladora: aparelho de 1U preto, com o display e as portas
-      P.push({ t: 'rect', x: c.x - cW / 2, y: yC, w: cW, h: cH, fill: '#1f2937', stroke: '#0b0f17', sw: 0.3, r: 0.6 });
+      P.push({ t: 'rect', x: c.x - cW / 2, y: yC, w: cW, h: cH, fill: '#1f2937', stroke: '#0b0f17', sw: 0.3 * k, r: 0.6 * k });
       P.push({ t: 'rect', x: c.x - cW * 0.44, y: yC + cH * 0.25, w: cW * 0.2, h: cH * 0.5, fill: '#0ea5e9' });
-      for (let k = 0; k < 4; k++) P.push({ t: 'rect', x: c.x + cW * 0.14 + k * cW * 0.075, y: yC + cH * 0.32, w: cW * 0.05, h: cH * 0.36, fill: '#93c5fd' });
-      P.push({ t: 'text', x: c.x - cW * 0.04, y: yC + cH * 0.66, txt: nome, size: 4.6, bold: true, align: 'center', color: '#ffffff' });
-      P.push({ t: 'text', x: c.x + 1.2, y: yC + cH + 3.2, txt: `${it.ctrl.qtd > 1 ? it.ctrl.qtd + ' × ' + nome + ' · ' : ''}${it.portas} porta${it.portas === 1 ? '' : 's'}${it.cfg.backup ? ' + backup' : ''}`, size: 5.5, color: '#111827' });
+      for (let i = 0; i < 4; i++) P.push({ t: 'rect', x: c.x + cW * 0.14 + i * cW * 0.075, y: yC + cH * 0.32, w: cW * 0.05, h: cH * 0.36, fill: '#93c5fd' });
+      P.push({ t: 'text', x: c.x - cW * 0.04, y: yC + cH * 0.66, txt: nome, size: 4.6 * k, bold: true, align: 'center', color: '#ffffff' });
+      P.push({ t: 'text', x: c.x + 1.2 * k, y: yC + cH + 3.2 * k, txt: `${it.ctrl.qtd > 1 ? it.ctrl.qtd + ' × ' + nome + ' · ' : ''}${it.portas} porta${it.portas === 1 ? '' : 's'}${it.cfg.backup ? ' + backup' : ''}`, size: 5.5 * k, color: '#111827' });
     }
     const proc = ps.cfg.processadora || (geo.length > 1 ? 'Processadora' : '');
     if (proc) {
-      const pW = 34, pH = 13, yP = yBase + hBaixo * 0.62;
+      const pW = 34 * k, pH = 13 * k, yP = yBase + hBaixo * 0.62;
       const xP = Math.min(xMax - pW / 2, Math.max(xMin + pW / 2, (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2));
-      const yJ = (yC + cH + 5 + yP) / 2;
-      for (const c of ctrls) P.push({ t: 'poly', pts: [[c.x, yC + cH], [c.x, yJ], [xP, yJ]], stroke: '#111827', sw: 0.3 });
-      P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111827', sw: 0.3 });
+      const yJ = (yC + cH + 5 * k + yP) / 2;
+      for (const c of ctrls) P.push({ t: 'poly', pts: [[c.x, yC + cH], [c.x, yJ], [xP, yJ]], stroke: '#111827', sw: 0.3 * k });
+      P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111827', sw: 0.3 * k });
       // a processadora: aparelho maior, com a tela azul e os botões
-      P.push({ t: 'rect', x: xP - pW / 2, y: yP, w: pW, h: pH, fill: '#374151', stroke: '#111827', sw: 0.35, r: 1 });
+      P.push({ t: 'rect', x: xP - pW / 2, y: yP, w: pW, h: pH, fill: '#374151', stroke: '#111827', sw: 0.35 * k, r: 1 * k });
       P.push({ t: 'rect', x: xP - pW * 0.32, y: yP + pH * 0.22, w: pW * 0.34, h: pH * 0.5, fill: '#60a5fa' });
-      for (let k = 0; k < 3; k++) P.push({ t: 'rect', x: xP + pW * 0.1 + k * pW * 0.09, y: yP + pH * 0.3, w: pW * 0.06, h: pH * 0.12, fill: '#d1d5db' });
-      P.push({ t: 'rect', x: xP - pW / 2 + 1.2, y: yP + pH, w: 1.6, h: 1.2, fill: '#111827' });
-      P.push({ t: 'rect', x: xP + pW / 2 - 2.8, y: yP + pH, w: 1.6, h: 1.2, fill: '#111827' });
-      P.push({ t: 'text', x: xP, y: yP + pH + 4.6, txt: proc, size: 6.5, bold: true, align: 'center', color: '#111827' });
+      for (let i = 0; i < 3; i++) P.push({ t: 'rect', x: xP + pW * 0.1 + i * pW * 0.09, y: yP + pH * 0.3, w: pW * 0.06, h: pH * 0.12, fill: '#d1d5db' });
+      P.push({ t: 'rect', x: xP - pW / 2 + 1.2 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
+      P.push({ t: 'rect', x: xP + pW / 2 - 2.8 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
+      P.push({ t: 'text', x: xP, y: yP + pH + 4.6 * k, txt: proc, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
     }
   }
   if (modo === 'ambos') {
     const nomes = [...new Set(geo.map(g => (g.it.ctrl.qtd > 1 ? g.it.ctrl.qtd + ' × ' : '') + ((CONTROLADORAS[g.it.ctrl.item] || {}).nome || '')).filter(Boolean))];
     const txt = 'Processamento: ' + ([ps.cfg.processadora].concat(nomes).filter(Boolean).join(' + ') || '—');
-    const w = larguraTexto(txt, 6.5, false) + 6;
-    P.push({ t: 'rect', x: area.x, y: area.y + area.h - 7, w, h: 6, fill: '#ffffff', stroke: '#111827', sw: 0.25 });
-    P.push({ t: 'text', x: area.x + 3, y: area.y + area.h - 2.9, txt, size: 6.5, color: '#111827' });
+    const w = larguraTexto(txt, 6.5 * k, false) + 6 * k;
+    P.push({ t: 'rect', x: area.x, y: area.y + area.h - 7 * k, w, h: 6 * k, fill: '#ffffff', stroke: '#111827', sw: 0.25 * k });
+    P.push({ t: 'text', x: area.x + 3 * k, y: area.y + area.h - 2.9 * k, txt, size: 6.5 * k, color: '#111827' });
   }
+  return s;
 }
 
 function juntarNomes(nomes) {
@@ -552,51 +573,129 @@ export function descricaoDasTelas(ps, titulo) {
   }).join(' + ');
 }
 
-/* uma folha do projeto técnico: modo 'ac' | 'sinal' | 'ambos' */
-export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo } = {}) {
-  const { w: W, h: H } = FOLHA_TECNICA;
-  const P = [];
-  P.push({ t: 'rect', x: 5, y: 5, w: W - 10, h: H - 10, stroke: '#000000', sw: 0.35 });
-  const titulo = meta.sala || (ps.telas.length === 1 ? ps.telas[0].nome : '') || meta.projeto || '';
-  if (titulo) P.push({ t: 'text', x: W / 2, y: 15, txt: titulo, size: 15, bold: true, align: 'center' });
-  const sub = descricaoDasTelas(ps, titulo);
-  if (sub) P.push({ t: 'text', x: W / 2, y: 22, txt: corta(sub, W - 30, 12, true), size: 12, bold: true, align: 'center' });
-  salaTecnica(P, ps, { x: 12, y: 27, w: W - 24, h: H - 27 - 45 }, modo);
-  const sem = ps.telas.filter(it => !it.pl).map(it => it.nome || 'tela');
-  if (sem.length) P.push({ t: 'text', x: 12, y: 29, txt: `Sem desenho (informadas em m² ou nº de gabinetes): ${sem.join(', ')}`, size: 6.5, color: '#92400e' });
-  // carimbo (o do modelo): logo | 4 linhas de dados em 2 colunas | número da folha
-  const yC = H - 40, alt = 35 / 4, x1 = W * 0.497, w1 = W * 0.29, w2 = W * 0.118, x3 = x1 + w1 + w2, pt = 8.5;
-  P.push({ t: 'line', x1: 5, y1: yC, x2: W - 5, y2: yC, stroke: '#000000', sw: 0.35 });
-  const rl = razaoLogo || 3.5, lw = 72, lh = lw / rl;
-  P.push({ t: 'img', src: 'logo', x: (5 + x1) / 2 - lw / 2, y: yC + (35 - lh) / 2, w: lw, h: lh });
-  const c1 = [['Nome do Projeto: ', meta.projeto], ['Local: ', meta.local], ['Tipo de Projeto: ', TIPOS_TECNICO[modo]], ['Engenheiro(a) Responsável: ', meta.responsavel]];
-  const c2 = [['Data: ', dataCompleta(meta.emissao)], ['Escala: ', 'Sem escala'], ['Ordem de Serviço: ', meta.os], ['Cliente: ', meta.cliente]];
-  const par = (x, y, w, [rot, val]) => {
-    P.push({ t: 'text', x: x + 2, y, txt: rot, size: pt, color: '#000000' });
-    const lr = larguraTexto(rot, pt, false);
-    P.push({ t: 'text', x: x + 2 + lr, y, txt: corta(val || '—', w - 4 - lr, pt, true), size: pt, bold: true, color: '#000000' });
-  };
-  for (let i = 0; i < 4; i++) {
-    const y = yC + i * alt;
-    P.push({ t: 'rect', x: x1, y, w: w1, h: alt, stroke: '#000000', sw: 0.3 });
-    P.push({ t: 'rect', x: x1 + w1, y, w: w2, h: alt, stroke: '#000000', sw: 0.3 });
-    par(x1, y + alt * 0.66, w1, c1[i]);
-    par(x1 + w1, y + alt * 0.66, w2, c2[i]);
-  }
-  P.push({ t: 'rect', x: x3, y: yC, w: W - 5 - x3, h: 35, stroke: '#000000', sw: 0.3 });
-  P.push({ t: 'text', x: (x3 + W - 5) / 2, y: yC + 23, txt: String(numero || 1).padStart(2, '0'), size: 34, bold: true, align: 'center' });
-  return { tipo: modo, prims: P, formato: { w: W, h: H, nome: '16:9' }, escala: 0, total };
+/* ---------------- a prancha do Projetech Calculator (igual) ---------------- */
+/* a moldura e as medidas fixas da folha — as do Calculator (U: o A4 vira a unidade) */
+function quadro(F) {
+  const PW = F.w, PH = F.h, MG = 8, U = Math.max(1, PH / 210);
+  const blockH = 23 * U, blockTop = PH - MG - blockH;
+  return { PW, PH, MG, U, blockH, blockTop, drawTop: MG + 8 * U, drawBottom: blockTop - 4 * U };
 }
-const dataCompleta = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim()); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso || ''); };
+
+/* o carimbo do Calculator: logo | três colunas de dados | identificação | O.S. e folha */
+function carimbo(P, Q, { grupos, esq, dir, com, numero, total, razaoLogo }) {
+  const { MG, U, PW } = Q;
+  const cbY = Q.blockTop, cbH = Q.blockH, cbW = PW - 2 * MG, LOGO_MIN = (U > 1 ? 52 : 42) * U, PAD = 3.6 * U;
+  const LBL = 0.70, CS = 0.13 * U, BUL = 2.2 * U, SEP = 1.8 * U;
+  const largRotulo = (fs, rot) => BUL + larguraTexto(rot.toUpperCase(), fs * LBL, false, CS);
+  const largDado = (fs, rot, val) => largRotulo(fs, rot) + SEP + larguraTexto(String(val || '—'), fs, true) + PAD;
+  const largPar = (fs, r, v) => larguraTexto(r + ': ', fs, false) + larguraTexto(String(v || '—'), fs, true) + PAD;
+  const medir = fs => {
+    const g = grupos.map(col => col.reduce((mx, r) => Math.max(mx, largDado(fs, r[0], r[1])), 0));
+    const e = esq.reduce((mx, r) => Math.max(mx, largPar(fs, r[0], r[1])), 0);
+    const d = dir.reduce((mx, r) => Math.max(mx, largPar(fs, r[0], r[1])), 0);
+    const c = Math.max(largPar(fs, com[0], com[1]), 15 * U);
+    return { g, e, d, c, total: g[0] + g[1] + g[2] + e + d + c + LOGO_MIN };
+  };
+  let FS = 6.8 * U, med = medir(FS);
+  while (FS > 4.8 * U && med.total > cbW) { FS -= 0.1; med = medir(FS); }
+  grupos = grupos.map(col => col.slice().sort((a, b) => largDado(FS, a[0], a[1]) - largDado(FS, b[0], b[1])));
+  const wD = med.g, wE = med.e, wDi = med.d, wF = med.c;
+  const wLogo = cbW - (wD[0] + wD[1] + wD[2]) - wE - wDi - wF;
+  const xLogo = MG, x0d = MG + wLogo;
+  const xD = [x0d, x0d + wD[0], x0d + wD[0] + wD[1]];
+  const xIdent = xD[2] + wD[2], xMeio = xIdent + wE, xFolha = xMeio + wDi;
+  const rh = cbH / 4;
+  P.push({ t: 'rect', x: MG, y: cbY, w: cbW, h: cbH, stroke: '#191919', sw: 0.35 * U });
+  [xD[0], xIdent, xFolha].forEach(x => P.push({ t: 'line', x1: x, y1: cbY, x2: x, y2: cbY + cbH, stroke: '#191919', sw: 0.25 * U }));
+  P.push({ t: 'line', x1: xMeio, y1: cbY, x2: xMeio, y2: cbY + cbH, stroke: '#969696', sw: 0.15 * U });
+  for (let i = 1; i < 4; i++) P.push({ t: 'line', x1: xIdent, y1: cbY + i * rh, x2: xFolha, y2: cbY + i * rh, stroke: '#969696', sw: 0.15 * U });
+  P.push({ t: 'line', x1: xFolha, y1: cbY + rh, x2: PW - MG, y2: cbY + rh, stroke: '#969696', sw: 0.15 * U });
+  const par = (rot, valor, x0, yb, maxW) => {
+    const lw = larguraTexto(rot + ': ', FS, false);
+    P.push({ t: 'text', x: x0, y: yb, txt: rot + ': ', size: FS, color: '#696969' });
+    P.push({ t: 'text', x: x0 + lw, y: yb, txt: corta(valor || '—', maxW - lw, FS, true), size: FS, bold: true, color: '#191919' });
+  };
+  const parDado = (rot, valor, x0, yb, maxW) => {
+    P.push({ t: 'circle', x: x0 + 0.75 * U, y: yb - 0.75 * U, r: 0.36 * U, fill: '#969696' });
+    const tx = rot.toUpperCase();
+    P.push({ t: 'text', x: x0 + BUL, y: yb, txt: tx, size: FS * LBL, color: '#8c8c8c', cs: CS });
+    const lw = BUL + larguraTexto(tx, FS * LBL, false, CS);
+    P.push({ t: 'text', x: x0 + lw + SEP, y: yb, txt: corta(valor || '—', maxW - lw - SEP, FS, true), size: FS, bold: true, color: '#191919' });
+  };
+  const passo = (cbH - 2.4 * U) / 5;
+  grupos.forEach((col, i) => col.forEach((l, j) => parDado(l[0], l[1], xD[i] + 1.8 * U, cbY + 3.4 * U + j * passo, wD[i] - 2.6 * U)));
+  let lh = cbH - 5 * U, lw2 = lh * (razaoLogo || 3.5);
+  if (lw2 > wLogo - 4 * U) { lw2 = wLogo - 4 * U; lh = lw2 / (razaoLogo || 3.5); }
+  P.push({ t: 'img', src: 'logo', x: xLogo + (wLogo - lw2) / 2, y: cbY + (cbH - lh) / 2, w: lw2, h: lh });
+  for (let i = 0; i < 4; i++) {
+    const yb = cbY + i * rh + rh / 2 + 0.9 * U;
+    par(esq[i][0], esq[i][1], xIdent + 1.8 * U, yb, wE - 2.6 * U);
+    par(dir[i][0], dir[i][1], xMeio + 1.8 * U, yb, wDi - 2.6 * U);
+  }
+  par(com[0], com[1], xFolha + 1.8 * U, cbY + rh / 2 + 0.9 * U, wF - 2.6 * U);
+  const nf = numero || 1, tf = total || 1, cxF = xFolha + wF / 2, texto = tf > 1 ? `${nf}/${tf}` : String(nf);
+  const yRot = cbY + rh + 3.6 * U;
+  P.push({ t: 'text', x: cxF, y: yRot, txt: 'Folha:', size: FS, color: '#696969', align: 'center' });
+  let fsF = (tf > 1 ? 17 : 21) * U;
+  while (fsF > 9 * U && larguraTexto(texto, fsF, true) > wF - 4 * U) fsF -= 1;
+  P.push({ t: 'text', x: cxF, y: (cbY + cbH + yRot + fsF * 0.254) / 2, txt: texto, size: fsF, bold: true, color: '#0a0a0a', align: 'center' });
+}
+
+/* uma folha do projeto técnico: modo 'ac' | 'sinal' | 'ambos'; formato 'a3' | '169' | 'a4' */
+export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato } = {}) {
+  const F = FORMATOS[formato] || FORMATOS.a3;
+  const Q = quadro(F), { U, MG, PW } = Q;
+  const P = [];
+  P.push({ t: 'rect', x: MG, y: MG, w: PW - 2 * MG, h: F.h - 2 * MG, stroke: '#1e1e1e', sw: 0.4 * U });
+  const its = ps.telas.filter(it => it.pl);
+  const sala = meta.sala || (its.length === 1 ? its[0].nome : '') || '';
+  // o que é a folha, como as legendas das páginas de vista do Calculator
+  P.push({ t: 'text', x: MG + 4 * U, y: MG + 5.6 * U, txt: TIPOS_TECNICO[modo] + (sala ? ' · ' + sala : ''), size: 9 * U, bold: true, color: '#464646' });
+  const sub = descricaoDasTelas(ps, sala);
+  if (sub) P.push({ t: 'text', x: MG + 4 * U, y: MG + 9.8 * U, txt: corta(sub, PW - 2 * MG - 8 * U, 7 * U), size: 7 * U, color: '#787878' });
+  const area = { x: MG + 6 * U, y: MG + 13 * U, w: PW - 2 * MG - 12 * U, h: Q.drawBottom - (MG + 13 * U) };
+  const esc = salaTecnica(P, ps, area, modo, U);
+  const sem = ps.telas.filter(it => !it.pl).map(it => it.nome || 'tela');
+  if (sem.length) P.push({ t: 'text', x: area.x, y: Q.drawBottom - 1 * U, txt: `Sem desenho (informadas em m² ou nº de gabinetes): ${sem.join(', ')}`, size: 6.5 * U, color: '#92400e' });
+
+  // os dados do carimbo
+  const g0 = its[0];
+  const tot = ps.telas.reduce((a, it) => ({ gab: a.gab + it.g.gabinetes, cases: a.cases + it.g.cases, kg: a.kg + it.g.peso_kg, med: a.med + it.g.potencia_med_w, max: a.max + it.g.potencia_max_w }), { gab: 0, cases: 0, kg: 0, med: 0, max: 0 });
+  const pxW = its.reduce((a, it) => a + it.pl.colunas * it.pl.px_l, 0), pxH = Math.max(0, ...its.map(it => it.pl.linhas * it.pl.px_a));
+  const modelos = [...new Set(ps.telas.map(it => it.painel.modelo).filter(Boolean))];
+  const pitch = g0 && g0.pl.px_l ? (g0.pl.largura_m / g0.pl.colunas) * 1000 / g0.pl.px_l : 0;
+  const dimensao = its.length === 1 ? `${fmtNum(g0.pl.largura_m, 2)} × ${fmtNum(g0.pl.altura_m, 2)} m` : its.length ? `${its.length} telas` : '—';
+  const escala = esc > 0 ? '1:' + fmtNum(Math.round(1000 / esc)) : '—';
+  const kw = w => fmtNum(w / 1000, 2) + ' kW';
+  const fisico = [['Gabinetes', fmtNum(tot.gab) + ' un'], ['Cases', fmtNum(tot.cases) + ' un'], ['Peso total', fmtNum(tot.kg, 1) + ' kg'], ['Consumo médio', kw(tot.med)], ['Consumo máximo', kw(tot.max)]];
+  const ctrls = Object.entries(ps.controladoras).map(([c, q]) => q + ' × ' + CONTROLADORAS[c].nome).join(' + ');
+  const cfg0 = g0 ? g0.cfg : PROJETO_PADRAO;
+  const racksTxt = ps.racks.length ? ps.racks.length + ' × ' + (RACKS[ps.racks[0].tipo] || 9) + ' saídas' : '—';
+  const sinal = [['Resolução', `${fmtNum(pxW)} × ${fmtNum(pxH)} px`], ['Pixel pitch', pitch ? fmtNum(pitch, 2) + ' mm' : '—'], ['Portas', fmtNum(ps.portas)], ['Dimensão', dimensao], ['Escala', escala]];
+  const grupos = modo === 'ac'
+    ? [fisico, [['Circuitos', fmtNum(ps.circuitos)], ['Réguas', fmtNum(ps.reguas)], ['Racks', racksTxt], ['Dimensão', dimensao], ['Escala', escala]],
+      [['Modelo', modelos.join(' + ') || '—'], ['Limite por circuito', fmtNum(cfg0.kw_circuito, 1) + ' kW'], ['Limite por régua', fmtNum(cfg0.kw_regua, 1) + ' kW'], ['Réguas por rack', String(cfg0.reguas_rack)], ['Processadora', ps.cfg.processadora || '—']]]
+    : modo === 'sinal'
+      ? [fisico, sinal, [['Modelo', modelos.join(' + ') || '—'], ['Controladora', ctrls || '—'], ['Processadora', ps.cfg.processadora || '—'], ['Limite por porta', g0 ? fmtNum(g0.pl.dados.px_porta) + ' px' : '—'], ['Cabo de dados', cfg0.backup ? '2 por porta' : '1 por porta']]]
+      : [fisico, sinal, [['Modelo', modelos.join(' + ') || '—'], ['Controladora', ctrls || '—'], ['Circuitos', fmtNum(ps.circuitos)], ['Réguas', fmtNum(ps.reguas)], ['Racks', racksTxt]]];
+  const tag = ((modelos[0] || '').match(/P\d+(?:[.,]\d+)?/i) || [''])[0].toUpperCase().replace(',', '.');
+  carimbo(P, Q, {
+    grupos,
+    esq: [['Projeto', meta.projeto || 'Painel de LED ' + tag], ['Local', meta.local], ['Ambiente/Sala', sala], ['Responsável Técnico(a)', meta.responsavel]],
+    dir: [['Data de montagem', dataCurta(meta.montagem)], ['Data de emissão', dataCurta(meta.emissao)], ['Cliente', meta.cliente], ['Agência', meta.agencia]],
+    com: ['Nº O.S', meta.os], numero, total, razaoLogo
+  });
+  return { tipo: modo, prims: P, formato: F, escala: esc };
+}
 
 /* As folhas do projeto técnico de uma sala: AC e Sinal (ou uma só, "AC e Sinal", na sala pequena) */
-export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas } = {}) {
+export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas, formato } = {}) {
   const desenhaveis = ps.telas.filter(it => it.pl);
   if (!desenhaveis.length) return [];
   const f = folhas || ps.cfg.folhas;
   const modos = f === 'juntas' ? ['ambos'] : f === 'separadas' ? ['ac', 'sinal'] : (desenhaveis.length === 1 && ps.reguas <= 1 ? ['ambos'] : ['ac', 'sinal']);
   const n0 = inicio || 0;
-  return modos.map((m, i) => folhaTecnica(ps, m, meta, { numero: n0 + i + 1, total: total || n0 + modos.length, razaoLogo }));
+  return modos.map((m, i) => folhaTecnica(ps, m, meta, { numero: n0 + i + 1, total: total || n0 + modos.length, razaoLogo, formato: formato || ps.cfg.folha }));
 }
 
 /* ---------------- saída: SVG (prévia) e PDF (jsPDF) ---------------- */

@@ -1,15 +1,17 @@
 /* Projetech · Painel de LED — projeto técnico da sala.
  *
- * As folhas são as do modelo da Projetech (projeto da Syngenta, OS 32465), desenhadas por js/cabeamento.js:
- * Cabeamento de AC (circuitos, réguas e o rack de energia), Cabeamento de Sinal (portas, controladoras e a
- * processadora) — ou uma folha só, "AC e Sinal", na sala pequena. Aqui só se monta o que a lista sabe
- * (evento, sala, OS, local, responsável) e se exporta o PDF (jsPDF).
+ * O desenho é o do modelo da Projetech (projeto da Syngenta, OS 32465) e a prancha é a do Projetech
+ * Calculator (moldura e carimbo iguais; A3, 16:9 ou A4), tudo em js/cabeamento.js: Cabeamento de AC
+ * (circuitos, réguas e o rack de energia), Cabeamento de Sinal (portas, controladoras e a processadora) — ou
+ * uma folha só, "AC e Sinal", na sala pequena. Aqui só se monta o que a lista sabe e se exporta o PDF.
  */
 import * as Cab from '../cabeamento.js';
 
 // cores das portas (as do projeto) — também no 3D
 export const CORES = Cab.CORES_PORTA;
 export const NOME_FOLHA = { ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal' };
+export const FORMATOS = Cab.FORMATOS;
+export function formatoDaLista(lista) { const f = (lista.projeto || {}).folha; return Cab.FORMATOS[f] ? f : 'a3'; }
 const RAZAO_LOGO = 2946 / 842;          // logo.png
 const IMAGENS_SVG = { logo: 'logo.png' };
 
@@ -18,14 +20,15 @@ function metaDaLista(ctx, lista, hoje) {
   return {
     projeto: lista.evento || '', local: lista.local || '', sala: lista.sala || '',
     responsavel: lista.responsavel_projeto || ctx.quem(), emissao: hoje || '',
-    cliente: lista.cliente || '', os: lista.os || ''
+    montagem: lista.ida ? ctx.M.D.mais(lista.ida, 1) : '',   // a ida é 1 dia antes da montagem
+    cliente: lista.cliente || '', agencia: '', os: lista.os || ''
   };
 }
 
 /* as folhas de uma sala: [{ tipo: 'ac'|'sinal'|'ambos', prims, formato }] */
 export function folhasDaLista(ctx, lista, { hoje, inicio, total } = {}) {
   const ps = ctx.M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
-  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO });
+  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista) });
 }
 
 export function svgDaFolha(ctx, lista, folha) { return Cab.svg(folha, IMAGENS_SVG); }
@@ -67,10 +70,10 @@ async function exportarProjetoDe(ctx, listas, partesNome) {
   let n = 0;
   listas.forEach((l, i) => { folhas.push(...folhasDaLista(ctx, l, { hoje, inicio: n, total })); n += contas[i]; });
   const { jsPDF } = window.jspdf;
-  const F = Cab.FOLHA_TECNICA;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [F.w, F.h], compress: true });
+  const F0 = folhas[0].formato;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [F0.w, F0.h], compress: true });
   folhas.forEach((f, i) => {
-    if (i) doc.addPage([F.w, F.h], 'landscape');
+    if (i) doc.addPage([f.formato.w, f.formato.h], 'landscape');
     Cab.pdf(doc, f, imagens);
   });
   const nome = partesNome.filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]/g, '');
