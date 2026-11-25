@@ -6,23 +6,25 @@
  * falta do que não sabe; quem contar preenche no Catálogo).
  *
  * PAINÉIS: medidas, pixels, peso e consumo vêm do Projetech Calculator (PANELS).
- * gabinetes por circuito (12) e pixels por porta (650.000) são PADRÃO A CONFIRMAR.
+ * pixels por porta (650.000) é PADRÃO A CONFIRMAR. Gabinetes por circuito: vazio = pelo consumo (até 3,5 kW por
+ * circuito de powercon — no projeto da Syngenta cada bloco de porta, 21 gabinetes de V10, é um circuito); o NT 50×100
+ * tem 3 (L’Oréal: 1 tronco por coluna).
  *
  * REGRAS: tiradas de ~60 telas das listas conferidas (pasta "LISTAS (ATUALIZADO)").
  * Cada uma diz em obs de onde saiu. Tudo editável na tela de Regras.
  */
 
-const V10 = { modelo: 'Absen Polaris V10 P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 8, w_max: 135, w_med: 45, por_case: 6, por_circuito: 12, px_porta: 650000 };
+const V10 = { modelo: 'Absen Polaris V10 P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 8, w_max: 135, w_med: 45, por_case: 6, por_circuito: null, px_porta: 650000 };
 const V10Q = Object.assign({}, V10, { modelo: 'Absen Polaris V10 P2.9 · Quina', kg: 8.1 });
-const NT = { modelo: 'Absen NT P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 7.8, w_max: 124.5, w_med: 41.5, por_case: 8, por_circuito: 12, px_porta: 650000 };
+const NT = { modelo: 'Absen NT P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 7.8, w_max: 124.5, w_med: 41.5, por_case: 8, por_circuito: null, px_porta: 650000 };
 const NTF = Object.assign({}, NT, { modelo: 'Absen NT P2.9 · Flexível', kg: 7.7 });
 const NTQ = Object.assign({}, NT, { modelo: 'Absen NT P2.9 · Quina', kg: 7.7 });
 const NT2 = { modelo: 'Absen NT P2.9 · 0,5×1 m', larg_m: 0.5, alt_m: 1, px_l: 168, px_a: 336, kg: 13.2, w_max: 249, w_med: 83, por_case: 4, por_circuito: 3, px_porta: 650000 };
-const LV = { modelo: 'LiteVision P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 7.8, w_max: 135, w_med: 45, por_case: 6, por_circuito: 12, px_porta: 650000 };
-const P39 = { modelo: 'Absen D3V P3.9', larg_m: 0.5, alt_m: 0.5, px_l: 128, px_a: 128, kg: 9.2, w_max: 127.5, w_med: 42.5, por_case: 6, por_circuito: 12, px_porta: 650000 };
+const LV = { modelo: 'LiteVision P2.9', larg_m: 0.5, alt_m: 0.5, px_l: 168, px_a: 168, kg: 7.8, w_max: 135, w_med: 45, por_case: 6, por_circuito: null, px_porta: 650000 };
+const P39 = { modelo: 'Absen D3V P3.9', larg_m: 0.5, alt_m: 0.5, px_l: 128, px_a: 128, kg: 9.2, w_max: 127.5, w_med: 42.5, por_case: 6, por_circuito: null, px_porta: 650000 };
 // P1.9 (03/11/2026): Absen NT V2, dados do Calculator v327 (PANELS: 256×256 px, 7,4 kg, 40/123,8 W, 8 por case)
 // porta: 655.360 px = 10 placas de 256 × 256 (capacidade da porta Novastar de 1 Gbps)
-const P19 = { modelo: 'Absen NT V2 P1.9', larg_m: 0.5, alt_m: 0.5, px_l: 256, px_a: 256, kg: 7.4, w_max: 123.8, w_med: 40, por_case: 8, por_circuito: 12, px_porta: 655360 };
+const P19 = { modelo: 'Absen NT V2 P1.9', larg_m: 0.5, alt_m: 0.5, px_l: 256, px_a: 256, kg: 7.4, w_max: 123.8, w_med: 40, por_case: 8, por_circuito: null, px_porta: 655360 };
 const P19Q = Object.assign({}, P19, { modelo: 'Absen NT V2 P1.9 · Quina', kg: 8.1 });
 
 // [id, nome, categoria, qtd, extra]
@@ -140,7 +142,7 @@ const ITENS = [
 
 /* Itens que entraram no catálogo depois da primeira versão: o app acrescenta os que faltam num catálogo
  * já gravado (sem mexer nos que existem). */
-export const VERSAO_CATALOGO = 3; // 2: entram os P1.9 · 3: estoque dos P1.9 (30 e 20 cases)
+export const VERSAO_CATALOGO = 4; // 2: entram os P1.9 · 3: estoque dos P1.9 (30 e 20 cases) · 4: gabinetes por circuito 12 (padrão chutado) → pelo consumo
 export const ITENS_NOVOS = ['led-p19', 'led-p19-q']; // entraram depois da primeira versão do catálogo
 
 export const CATEGORIAS = [
@@ -180,7 +182,7 @@ const P19_CHAPINHA = ['led-p19', 'led-p19-q'];
 
 /* Sobe a cada mudança nas regras padrão: aparelhos com as regras antigas (e não editadas) se atualizam sozinhos.
  * 3 = réguas, racks e cabos de dados vêm do projeto da tela (13/10/2026). */
-export const VERSAO_REGRAS = 6; // 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10 · 6: estrutura do Calculator (palco, pesos por metro, segunda linha)
+export const VERSAO_REGRAS = 7; // 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10 · 6: estrutura do Calculator (palco, pesos por metro, segunda linha) · 7: projeto da sala (racks da sala, circuitos, controladoras)
 
 export function regrasIniciais() {
   const r = [
@@ -189,13 +191,20 @@ export function regrasIniciais() {
     R({ item: 'rj-1m', paineis: JUMPER_1M, base: 'gabinetes', reserva: 0.05, multiplo: 10, obs: 'Um jumper de dados por gabinete, +5%, em dezenas — sempre igual ao powercon 1 m nas listas.' }),
     R({ item: 'pc-15', paineis: ['led-nt-50x100'], base: 'gabinetes', reserva: 0.05, multiplo: 10, obs: 'NT 50×100 (gabinete de 1 m de altura) usa jumper de 1,5 m — L’Oréal 6 × 3 m levou 50.' }),
     R({ item: 'rj-15', paineis: ['led-nt-50x100'], base: 'gabinetes', reserva: 0.05, multiplo: 10, obs: 'NT 50×100 usa jumper de dados de 1,5 m — L’Oréal 6 × 3 m levou 50.' }),
-    R({ item: 'pc-10m', base: 'circuitos', adicional: 1, obs: 'Tronco de energia: 1 por circuito (12 gabinetes por circuito — confirmar) + 1 reserva.' }),
+    R({ item: 'pc-10m', base: 'circuitos_projeto', adicional: 1, obs: 'Do projeto: 1 cabo de 10 m por circuito (da régua até o 1º gabinete) + 1 reserva. Cada bloco de porta é um circuito, dividido se passar de 3,5 kW — como no projeto da Syngenta; nas listas conferidas o powercon 10 m quase sempre bate com o RJ45 20 m.' }),
     R({ item: 'rj-20m', base: 'cabos_dados', adicional: 1, obs: 'Do projeto: 1 cabo de 20 m por porta de dados (2 com backup ligado na tela) + 1 reserva.' }),
     R({ item: 'regua-pc', base: 'reguas', obs: 'Do projeto: 1 régua Steck/Powercon por descida de energia (fecha colunas até 7,5 kW de consumo máximo — ajustável na tela).' }),
-    R({ item: 'rack-9', base: 'racks_9', obs: 'Do projeto: racks de 9 saídas (até 4 réguas por rack — ajustável na tela).' }),
-    R({ item: 'rack-12', base: 'racks_12', obs: 'Do projeto, quando a tela usa rack de 12 saídas.' }),
-    R({ item: 'rack-5', base: 'racks_5', obs: 'Do projeto, quando a tela usa rack de 5 saídas.' }),
-    R({ item: 'camlock-150', base: 'itens:rack-9,rack-12', fator: 5, obs: '5 camlocks por rack do painel (R, S, T, N e terra).' }),
+    R({ escopo: 'lista', item: 'rack-9', base: 'racks_9', obs: 'Do projeto da sala: as réguas de todas as telas repartidas em racks de 9 saídas, até 4 réguas por rack (Syngenta, Plenária: 8 réguas → 2 racks). Ajustável no projeto.' }),
+    R({ escopo: 'lista', item: 'rack-12', base: 'racks_12', obs: 'Do projeto da sala, quando ela usa rack de 12 saídas.' }),
+    R({ escopo: 'lista', item: 'rack-5', base: 'racks_5', obs: 'Do projeto da sala, quando ela usa rack de 5 saídas.' }),
+    R({ escopo: 'lista', item: 'camlock-150', base: 'itens:rack-9,rack-12', fator: 5, obs: '5 camlocks por rack trifásico (R, S, T, N e terra).' }),
+    R({ escopo: 'lista', item: 'camlock-150', base: 'item:rack-5', fator: 3, obs: '3 camlocks por rack de 5 saídas (fase, neutro e terra) — Borges e Costa: 1 rack 9 + 1 rack 5 = 8 camlocks.' }),
+    // processamento: as controladoras de cada tela (o projeto escolhe), 1 de reserva e o cabo USB para configurar
+    R({ item: 'send-660', base: 'ctrl_660', obs: 'Do projeto: MCTRL660 da tela — cada uma segura 4 portas e 2,3 milhões de pixels.' }),
+    R({ item: 'taurus-tb60', base: 'ctrl_tb60', obs: 'Do projeto, quando a tela usa Taurus TB60 (4 portas, 2,3 milhões de pixels).' }),
+    R({ item: 'taurus-tb1', base: 'ctrl_tb1', obs: 'Do projeto, quando a tela usa Taurus TB1 (1 porta, 650 mil pixels).' }),
+    R({ escopo: 'lista', item: 'send-660', base: 'lista', cond: { base: 'ctrl_660', op: '>', valor: 0 }, obs: '1 MCTRL660 de reserva por lista (Borges e Costa: 1 tela com 2 portas levou 2).' }),
+    R({ escopo: 'lista', item: 'usb-ab', base: 'lista', cond: { base: 'controladoras', op: '>', valor: 0 }, obs: '1 cabo USB AB por lista, para configurar a controladora.' }),
     R({ item: 'prol-media', base: 'item:regua-pc', fator: 1.5, adicional: 2, maximo: 24, obs: 'Prolonga do rack até a régua: ≈ 1,5 por régua + 2, até 24.' }),
     R({ item: 'prol-longa', base: 'item:regua-pc', fator: 0.25, arred: 'baixo', maximo: 4, obs: '1 prolonga longa a cada 4 réguas, até 4.' }),
 

@@ -62,7 +62,11 @@ export const BASE_NOME = {
   m2: 'm²', circuitos: 'circuitos', portas: 'portas de dados', apoios: 'apoios de mão francesa', mf_192: 'peças de 1,92 (pelos apoios)',
   mf_144: 'peças de 1,44 (pelos apoios)', mf_096: 'peças de 0,96 (pelos apoios)', pesos: 'pesos (1 por metro, por fileira)',
   mf_segunda_linha: 'fileiras com segunda linha', tela: 'tela', lista: 'lista',
-  gabinetes_chao: 'gabinetes no chão', telas: 'telas', telas_chao: 'telas no chão'
+  gabinetes_chao: 'gabinetes no chão', telas: 'telas', telas_chao: 'telas no chão',
+  // do projeto (da tela ou da sala inteira)
+  circuitos_projeto: 'circuitos do projeto', cabos_dados: 'cabos de dados do projeto', reguas: 'réguas do projeto',
+  racks: 'racks do projeto', racks_5: 'racks de 5 saídas', racks_9: 'racks de 9 saídas', racks_12: 'racks de 12 saídas',
+  controladoras: 'controladoras do projeto', ctrl_660: 'MCTRL660 do projeto', ctrl_tb1: 'Taurus TB1 do projeto', ctrl_tb60: 'Taurus TB60 do projeto'
 };
 export const ARRED_NOME = { cima: 'para cima', baixo: 'para baixo', proximo: 'para o mais próximo' };
 

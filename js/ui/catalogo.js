@@ -16,7 +16,7 @@ export function render(ctx, [abrir]) {
   <div class="busca-linha"><input type="search" class="buscar" placeholder="Buscar item…" value="${B.esc(busca)}"></div>
   ${grupos.map(([k, its]) => `<div class="card" style="padding:10px 12px"><h2>${B.esc(ctx.CATEGORIAS[k])} <span class="conta">${its.length}</span></h2>
     ${its.map(c => `<div class="lin" data-c="${B.esc(c.id)}" style="${c.ativo === false ? 'opacity:.5' : ''};cursor:pointer">
-      <div class="nome">${B.esc(c.nome)}<small>${c.painel ? B.esc(c.painel.modelo || '') + ` · ${c.painel.por_case} gab/case · ${c.painel.por_circuito} gab/circuito` : ''}${c.obs ? (c.painel ? ' · ' : '') + B.esc(c.obs) : ''}${c.ativo === false ? ' · inativo' : ''}</small></div>
+      <div class="nome">${B.esc(c.nome)}<small>${c.painel ? B.esc(c.painel.modelo || '') + ` · ${c.painel.por_case} gab/case · ${c.painel.por_circuito ? c.painel.por_circuito + ' gab/circuito' : 'circuito pelo consumo'}` : ''}${c.obs ? (c.painel ? ' · ' : '') + B.esc(c.obs) : ''}${c.ativo === false ? ' · inativo' : ''}</small></div>
       <span class="num ${c.qtd == null ? 'mut2' : ''}" style="font-weight:800">${c.qtd == null ? 'não contado' : B.num(atual.get(c.id))}</span>
       <span>${B.ico('chev')}</span></div>`).join('')}</div>`).join('') || '<div class="card vazio">Nada encontrado.</div>'}`;
 }
@@ -61,10 +61,10 @@ async function editarItem(ctx, c) {
           <label class="campo"><span>Consumo máx (W)</span><input class="p-wm" inputmode="decimal" value="${v(p.w_max)}" ${ro}></label>
           <label class="campo"><span>Consumo médio (W)</span><input class="p-wd" inputmode="decimal" value="${v(p.w_med)}" ${ro}></label>
           <label class="campo"><span>Gabinetes por case</span><input class="p-pc" inputmode="numeric" value="${v(p.por_case || 6)}" ${ro}></label>
-          <label class="campo"><span>Gabinetes por circuito</span><input class="p-ci" inputmode="numeric" value="${v(p.por_circuito || 12)}" ${ro}></label>
+          <label class="campo"><span>Máx. gabinetes por circuito</span><input class="p-ci" inputmode="numeric" value="${v(p.por_circuito || '')}" placeholder="pelo consumo" ${ro}></label>
           <label class="campo"><span>Pixels por porta</span><input class="p-pp" inputmode="numeric" value="${v(p.px_porta || 650000)}" ${ro}></label>
         </div>
-        <p class="dica">Gabinetes por circuito e pixels por porta mudam a quantidade de cabos de tronco. Padrão 12 e 650.000 — confira com a prática.</p>
+        <p class="dica">Pixels por porta decide os blocos do sinal; cada bloco é um circuito de energia, dividido se passar de 3,5 kW (ou do máximo de gabinetes por circuito, se preenchido — o NT 50×100 usa 3). Isso muda os cabos RJ45 20 m e powercon 10 m.</p>
       </div>
       ${!novo ? `<p class="dica">Quantidade atual considera perdas, descartes e ajustes registrados. Para recontar, use "Ajustar inventário" na tela do item no Estoque.</p>` : ''}`,
     botoes: sup ? [{ txt: 'Cancelar', valor: null }].concat(!novo ? [{ txt: 'Ver no estoque', valor: 'estoque' }] : []).concat([{
@@ -79,7 +79,7 @@ async function editarItem(ctx, c) {
         out.painel = out.cat === 'led' ? {
           modelo: el.querySelector('.p-modelo').value.trim(), larg_m: n('.p-l') || 0.5, alt_m: n('.p-a') || 0.5, kg: n('.p-kg') || 0,
           px_l: n('.p-pl') || 0, px_a: n('.p-pa') || 0, w_max: n('.p-wm') || 0, w_med: n('.p-wd') || 0,
-          por_case: n('.p-pc') || 6, por_circuito: n('.p-ci') || 12, px_porta: n('.p-pp') || 650000
+          por_case: n('.p-pc') || 6, por_circuito: n('.p-ci') || null, px_porta: n('.p-pp') || 650000
         } : null;
         return out;
       }

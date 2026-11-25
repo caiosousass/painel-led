@@ -57,7 +57,7 @@ export const podeEditar = (u, modulo) => nivel(u, modulo) === 'editar';
 /* Que tela usa qual permissão. A lista abre para quem separa ou confere retorno também
  * (é por ela que se chega na separação), mas só edita quem tem "Listas: editar". */
 export const MODULO_DA_ROTA = {
-  inicio: ['inicio'], listas: ['listas', 'separacao', 'retorno'], lista: ['listas', 'separacao', 'retorno'], evento: ['listas', 'separacao', 'retorno'],
+  inicio: ['inicio'], listas: ['listas', 'separacao', 'retorno'], lista: ['listas', 'separacao', 'retorno'], evento: ['listas', 'separacao', 'retorno'], projeto: ['listas', 'separacao', 'retorno'], receber: ['listas'],
   separar: ['separacao'], retorno: ['retorno'], estoque: ['estoque'], item: ['estoque'],
   manutencao: ['manutencao'], bancada: ['bancada'], regras: ['regras'], catalogo: ['catalogo']
 };

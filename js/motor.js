@@ -10,6 +10,8 @@
  *  - Datas sempre 'YYYY-MM-DD' (string). Nada de new Date('2026-09-12') — em UTC-3 vira dia 11.
  */
 
+import { PROJETO_PADRAO, RACKS, CONTROLADORAS, SALA_PADRAO, configTela, escolherSentido, planoTela, controladorasDaTela, planoSala as planoSalaCab } from './cabeamento.js';
+
 const EPS = 1e-9;
 
 /* ============================================================
@@ -187,7 +189,8 @@ export function geometria(tela, painel) {
   const pxPorGab = num(p.px_l) * num(p.px_a);
   const pixels = gabinetes * pxPorGab;
   const porCase = num(p.por_case) || 6;
-  const porCirc = num(p.por_circuito) || 12;
+  // sem desenho (m² / nº de gabinetes): circuitos pelo máximo de gabinetes do painel ou pelo consumo (3,5 kW)
+  const porCirc = num(p.por_circuito) || (num(p.w_max) ? Math.max(1, Math.floor(3500 / num(p.w_max))) : 12);
   const pxPorta = num(p.px_porta) || 650000;
   const chao = (tela.montagem || 'chao') === 'chao' && colunas > 0 && linhas > 0;
   // mão francesa e pesos: a regra da equipe (a mesma do Calculator), com palco e segunda linha
@@ -219,103 +222,36 @@ export function geometria(tela, painel) {
 }
 
 /* ============================================================
- * Projeto técnico da tela: cabeamento de dados (portas) e de energia (réguas e racks)
+ * Projeto técnico: as contas do cabeamento moram em cabeamento.js — o MESMO arquivo do Projetech
+ * Calculator (assim o projeto sai igual nos dois apps). Aqui só se traduz a tela da lista para ele.
  * ============================================================ */
 
-export const PROJETO_PADRAO = { inicio: 'inf-esq', backup: false, kw_regua: 7.5, reguas_rack: 4, rack: 'rack-9', processadora: '', portas: 'colunas' };
-export const RACKS = { 'rack-5': 5, 'rack-9': 9, 'rack-12': 12 };
+export { PROJETO_PADRAO, RACKS, CONTROLADORAS, SALA_PADRAO, escolherSentido, controladorasDaTela };
 
-export function configProjeto(tela) {
-  return Object.assign({}, PROJETO_PADRAO, (tela && tela.projeto) || {});
-}
+export function configProjeto(tela) { return configTela(tela && tela.projeto); }
 
-/* Divide n itens em k grupos o mais iguais possível, na ordem: 70 em 12 → 6,6,…,6,5,5. */
-function dividir(n, k) {
-  const base = Math.floor(n / k), extra = n % k, out = [];
-  for (let i = 0; i < k; i++) out.push(base + (i < extra ? 1 : 0));
-  return out;
-}
-
-/* O plano completo de uma tela com colunas × linhas conhecidas.
- * Dados: cada porta pega COLUNAS INTEIRAS até o limite de pixels (como no projeto da Abbvie:
- *   Girassol 7 linhas → 3 colunas por porta; Ipês 9 linhas → 2), e o caminho é uma serpentina
- *   vertical que nasce no canto escolhido.
- * Energia: cada régua Steck/Powercon fecha colunas inteiras até o limite de consumo MÁXIMO
- *   (padrão 7,5 kW), repartidas por igual; cada rack recebe até N réguas (padrão 4).
- * Linha 0 = de cima; coluna 0 = da esquerda.
- */
+/* O plano de uma tela com colunas × linhas conhecidas (null se ela foi informada em m² ou gabinetes) */
 export function planoProjeto(tela, painel) {
   const g = geometria(tela, painel);
-  const C = g.colunas, L = g.linhas;
-  if (!C || !L) return null;
-  const p = painel || {};
-  const cfg = configProjeto(tela);
-  const pxGab = num(p.px_l) * num(p.px_a);
-  const pxPorta = num(cfg.px_porta) || num(p.px_porta) || 650000;
-  let colsPorta = pxGab ? Math.floor(pxPorta / (L * pxGab)) : C;
-  const colunaExcede = colsPorta < 1;
-  if (colsPorta < 1) colsPorta = 1;
-  colsPorta = Math.min(colsPorta, C);
+  if (!g.colunas || !g.linhas) return null;
+  return planoTela({ colunas: g.colunas, linhas: g.linhas, painel, cfg: tela.projeto });
+}
 
-  const daDireita = /dir$/.test(cfg.inicio);
-  const deBaixo = /^inf/.test(cfg.inicio);
-  const ordemCols = Array.from({ length: C }, (_, i) => (daDireita ? C - 1 - i : i));
-  const portas = [];
-  const cheia = cfg.portas === 'cheia';
-  if (cheia) {
-    // "Encher a porta": uma serpentina só pela tela inteira, cortada a cada N gabinetes (a porta pode
-    // terminar no meio de uma coluna e a próxima continua dali) — P1.9 6 de altura: 10 por porta, não 6
-    const porPorta = Math.max(1, pxGab ? Math.floor(pxPorta / pxGab) : C * L);
-    const tudo = [];
-    ordemCols.forEach((c, j) => {
-      const sobe = deBaixo ? j % 2 === 0 : j % 2 === 1;
-      for (let k = 0; k < L; k++) tudo.push([c, sobe ? L - 1 - k : k]);
+/* O projeto da SALA (uma lista): as telas na ordem da lista (esquerda → direita); racks da sala inteira */
+export function planoSala(telas, cat, sala) {
+  const idx = cat instanceof Map ? cat : indexar(cat || []);
+  const entra = [];
+  for (const t of telas || []) {
+    const c = idx.get(t.painel);
+    if (!c || !c.painel) continue;
+    const g = geometria(t, c.painel);
+    if (!g.gabinetes) continue;
+    entra.push({
+      tela: t, nome: t.nome || '', colunas: g.colunas, linhas: g.linhas, painel: c.painel, cfg: t.projeto,
+      estimativa: g.colunas && g.linhas ? null : { gabinetes: g.gabinetes, pixels: g.pixels, portas: g.portas, circuitos: g.circuitos }
     });
-    for (let i = 0, n = 1; i < tudo.length; i += porPorta, n++) {
-      const caminho = tudo.slice(i, i + porPorta);
-      const cols = [...new Set(caminho.map(([c]) => c))];
-      portas.push({ n, cols, gabinetes: caminho.length, pixels: caminho.length * pxGab, caminho });
-    }
-  } else {
-    for (let i = 0, n = 1; i < C; i += colsPorta, n++) {
-      const cols = ordemCols.slice(i, i + colsPorta);
-      const caminho = [];
-      cols.forEach((c, j) => {
-        const sobe = deBaixo ? j % 2 === 0 : j % 2 === 1; // 1ª coluna sai do canto escolhido
-        for (let k = 0; k < L; k++) caminho.push([c, sobe ? L - 1 - k : k]);
-      });
-      portas.push({ n, cols, gabinetes: cols.length * L, pixels: cols.length * L * pxGab, caminho });
-    }
   }
-
-  const wCol = L * num(p.w_max);
-  const limite = Math.max(0.1, num(cfg.kw_regua) || 7.5) * 1000;
-  const maxCols = wCol ? Math.max(1, Math.floor(limite / wCol)) : C;
-  const nReguas = Math.ceil(C / maxCols);
-  const reguas = [];
-  let c0 = 0;
-  dividir(C, nReguas).forEach((qtd, i) => {
-    reguas.push({ n: i + 1, col_ini: c0, col_fim: c0 + qtd - 1, colunas: qtd, w: qtd * wCol, rack: 0 });
-    c0 += qtd;
-  });
-  const porRack = Math.max(1, Math.round(num(cfg.reguas_rack) || 4));
-  const nRacks = Math.ceil(nReguas / porRack);
-  const racks = [];
-  let r0 = 0;
-  dividir(nReguas, nRacks).forEach((qtd, i) => {
-    const rs = reguas.slice(r0, r0 + qtd);
-    rs.forEach(r => { r.rack = i + 1; });
-    racks.push({ n: i + 1, tipo: RACKS[cfg.rack] ? cfg.rack : 'rack-9', reguas: rs.map(r => r.n), w: rs.reduce((s, r) => s + r.w, 0) });
-    r0 += qtd;
-  });
-
-  return {
-    colunas: C, linhas: L, gabinetes: g.gabinetes, largura_m: g.largura_m, altura_m: g.altura_m,
-    px_l: num(p.px_l), px_a: num(p.px_a), cfg,
-    dados: { modo: cheia ? 'cheia' : 'colunas', cols_por_porta: colsPorta, gab_por_porta: cheia ? Math.max(1, Math.floor(pxPorta / (pxGab || 1))) : colsPorta * L,
-      coluna_excede: colunaExcede && !cheia, px_porta: pxPorta, portas, cabos: portas.length * (cfg.backup ? 2 : 1) },
-    energia: { w_coluna: wCol, limite_w: limite, reguas, racks, w_total: C * wCol }
-  };
+  return planoSalaCab(entra, sala);
 }
 
 /* Folha de distribuição: quanto de cada item vai para cada tela. Vem das origens das linhas;
@@ -340,29 +276,27 @@ export function distribuicaoPorTela(telas, linhas) {
   return out;
 }
 
-/* Números do projeto que viram base das regras (é assim que o projeto mexe na lista). */
-function basesDoProjeto(tela, painel, g) {
-  const cfg = configProjeto(tela);
-  const plano = planoProjeto(tela, painel);
-  let portas, reguas, racks;
-  if (plano) {
-    portas = plano.dados.portas.length; reguas = plano.energia.reguas.length; racks = plano.energia.racks.length;
-  } else { // m² / nº de gabinetes: sem desenho, estima pela potência total
-    portas = g.portas;
-    reguas = g.potencia_max_w ? Math.ceil(g.potencia_max_w / ((num(cfg.kw_regua) || 7.5) * 1000)) : 0;
-    racks = reguas ? Math.ceil(reguas / (num(cfg.reguas_rack) || 4)) : 0;
-  }
+/* Números do projeto que viram base das regras (é assim que o projeto mexe na lista).
+ * it = a tela dentro do planoSala. Os racks da tela são os dela sozinha (o simulador de regras usa);
+ * na lista, os racks vêm da sala inteira (totais). */
+function basesDoProjeto(it) {
+  const cfg = it.cfg;
+  const racks = it.pl ? it.pl.energia.racks.length : (it.reguas ? Math.ceil(it.reguas / (num(cfg.reguas_rack) || 4)) : 0);
   const tipo = RACKS[cfg.rack] ? cfg.rack : 'rack-9';
+  const ctrl = id => (it.ctrl.item === id ? it.ctrl.qtd : 0);
   return {
-    portas, cabos_dados: portas * (cfg.backup ? 2 : 1), reguas, racks,
-    racks_5: tipo === 'rack-5' ? racks : 0, racks_9: tipo === 'rack-9' ? racks : 0, racks_12: tipo === 'rack-12' ? racks : 0
+    portas: it.portas, cabos_dados: it.cabos_dados, circuitos_projeto: it.circuitos, reguas: it.reguas, racks,
+    racks_5: tipo === 'rack-5' ? racks : 0, racks_9: tipo === 'rack-9' ? racks : 0, racks_12: tipo === 'rack-12' ? racks : 0,
+    controladoras: it.ctrl.qtd, ctrl_660: ctrl('send-660'), ctrl_tb1: ctrl('taurus-tb1'), ctrl_tb60: ctrl('taurus-tb60')
   };
 }
 
 // Bases que a tela de regras oferece (a tela é quem dá nome humano a elas).
-export const BASES_TELA = ['gabinetes', 'cases', 'colunas', 'linhas', 'largura_m', 'altura_m', 'm2', 'circuitos', 'portas',
-  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'apoios', 'mf_192', 'mf_144', 'mf_096', 'pesos', 'mf_segunda_linha', 'tela'];
-export const BASES_LISTA = ['lista', 'gabinetes', 'gabinetes_chao', 'cases', 'circuitos', 'telas', 'telas_chao', 'm2'];
+export const BASES_TELA = ['gabinetes', 'cases', 'colunas', 'linhas', 'largura_m', 'altura_m', 'm2', 'circuitos', 'circuitos_projeto', 'portas',
+  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60',
+  'apoios', 'mf_192', 'mf_144', 'mf_096', 'pesos', 'mf_segunda_linha', 'tela'];
+export const BASES_LISTA = ['lista', 'gabinetes', 'gabinetes_chao', 'cases', 'circuitos', 'telas', 'telas_chao', 'm2',
+  'circuitos_projeto', 'portas', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60'];
 
 /* ============================================================
  * Motor de regras
@@ -453,14 +387,22 @@ function avaliar(regras, valores, somaInicial, resolveItem) {
  * origens de cada item dizem tela, regra, base, fator e resultado — a tela escreve
  * "80 gabinetes × 1 = 80" a partir disso.
  */
-export function calcularSugestoes(telas, catalogo, regras) {
+export function calcularSugestoes(telas, catalogo, regras, { sala } = {}) {
   const cat = indexar(catalogo);
+  // o projeto da sala inteira: racks repartidos entre as telas, controladoras de cada tela
+  const ps = planoSala(telas, cat, sala);
+  const daSala = new Map(ps.telas.map(it => [it.tela, it]));
   const ativas = (regras || []).filter(r => r && r.ativa !== false && r.item);
   const itens = new Map();
   const erros = [];
   const infoTelas = [];
   const somaTelas = {};
-  const totais = { lista: 1, gabinetes: 0, gabinetes_chao: 0, cases: 0, circuitos: 0, telas: 0, telas_chao: 0, m2: 0 };
+  const totais = { lista: 1, gabinetes: 0, gabinetes_chao: 0, cases: 0, circuitos: 0, telas: 0, telas_chao: 0, m2: 0,
+    circuitos_projeto: ps.circuitos, portas: ps.portas, reguas: ps.reguas, racks: ps.racks.length,
+    racks_5: ps.racks.filter(r => r.tipo === 'rack-5').length, racks_9: ps.racks.filter(r => r.tipo === 'rack-9').length,
+    racks_12: ps.racks.filter(r => r.tipo === 'rack-12').length,
+    controladoras: Object.values(ps.controladoras).reduce((a, b) => a + b, 0),
+    ctrl_660: ps.controladoras['send-660'] || 0, ctrl_tb1: ps.controladoras['taurus-tb1'] || 0, ctrl_tb60: ps.controladoras['taurus-tb60'] || 0 };
 
   const juntar = (o, extra) => {
     if (!itens.has(o.item)) itens.set(o.item, { qtd: 0, origens: [] });
@@ -477,7 +419,7 @@ export function calcularSugestoes(telas, catalogo, regras) {
       continue;
     }
     const bases = geometria(tela, painelItem.painel);
-    if (bases.gabinetes) Object.assign(bases, basesDoProjeto(tela, painelItem.painel, bases));
+    if (bases.gabinetes && daSala.has(tela)) Object.assign(bases, basesDoProjeto(daSala.get(tela)));
     infoTelas.push({ id: tela.id, bases, erro: bases.gabinetes ? null : 'sem_medida' });
     if (!bases.gabinetes) continue;
     totais.telas++; totais.gabinetes += bases.gabinetes; totais.cases += bases.cases;
@@ -503,7 +445,7 @@ export function calcularSugestoes(telas, catalogo, regras) {
   }
 
   for (const [id, it] of itens) if (!it.qtd) itens.delete(id);
-  return { itens, telas: infoTelas, totais, erros };
+  return { itens, telas: infoTelas, totais, erros, sala: ps };
 }
 
 /* ============================================================

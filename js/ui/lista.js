@@ -4,42 +4,20 @@ import { imprimirLista } from './imprimir.js';
 import { novaSala } from './evento.js';
 import { abrir3D } from './tres.js';
 import { HISTORICO } from '../historico.js';
-import { desenhoTela, svg as svgProjeto, folhasDaLista, primsDaFolha, exportarProjeto, FOLHA } from './projeto.js';
+import { exportarProjeto } from './projeto.js';
 
 const abertos = new Set();   // "por quê?" abertos
-const abertosProj = new Set(); // telas com o projeto aberto
+const NOME_CTRL = { 'send-660': 'MCTRL660', 'taurus-tb60': 'Taurus TB60', 'taurus-tb1': 'Taurus TB1' };
 
-/* Seção "Projeto" de uma tela: ajustes do cabeamento de sinal e de energia + prévia do desenho. */
-function projetoHtml(ctx, t, pode) {
-  const { B, M } = ctx;
-  const c = ctx.item(t.painel);
-  const pl = c && c.painel ? M.planoProjeto(t, c.painel) : null;
-  const cfg = M.configProjeto(t);
-  const ro = pode ? '' : 'disabled';
-  const k = s => `p-${t.id}-${s}`;
-  const pl1 = (n, s, p) => n + ' ' + (n === 1 ? s : p);
-  const resumo = pl
-    ? `${pl1(pl.dados.portas.length, 'porta', 'portas')} (${pl.dados.modo === 'cheia' ? 'até ' + pl1(pl.dados.gab_por_porta, 'placa', 'placas') : pl1(pl.dados.cols_por_porta, 'coluna', 'colunas')} cada) · ${pl1(pl.energia.reguas.length, 'régua', 'réguas')} · ${pl1(pl.energia.racks.length, 'rack', 'racks')} de ${M.RACKS[cfg.rack] || 9} saídas`
-    : 'o desenho precisa de largura × altura ou colunas × linhas';
-  const inicio = [['inf-esq', 'Embaixo, esq.'], ['inf-dir', 'Embaixo, dir.'], ['sup-esq', 'Em cima, esq.'], ['sup-dir', 'Em cima, dir.']];
-  return `<details class="projeto-tela" ${abertosProj.has(t.id) ? 'open' : ''}>
-    <summary>${B.ico('painel')} <b>Projeto</b> <span class="peq muted">${resumo}</span></summary>
-    ${pl ? `<div class="proj-prev">${svgProjeto(desenhoTela(pl, { x: 0, y: 0, w: 380, h: 150 }), { x: -2, y: -2, w: 384, h: 156 })}</div>` : ''}
-    <div class="grade g3" style="margin-top:10px">
-      <label class="campo"><span>Sinal começa</span><select data-pc="inicio" ${ro}>${inicio.map(([v, tx]) => `<option value="${v}" ${v === cfg.inicio ? 'selected' : ''}>${tx}</option>`).join('')}</select></label>
-      <label class="campo"><span>Cada porta pega</span><select data-pc="portas" ${ro}>
-        <option value="colunas">Colunas inteiras</option>
-        <option value="cheia" ${cfg.portas === 'cheia' ? 'selected' : ''}>O máximo de placas (quebra coluna)</option></select></label>
-      <label class="campo"><span>Cabo de dados</span><select data-pc="backup" ${ro}><option value="0">1 por porta</option><option value="1" ${cfg.backup ? 'selected' : ''}>2 por porta (backup)</option></select></label>
-      <label class="campo"><span>Processadora</span><input data-pc="processadora" data-k="${k('proc')}" value="${B.esc(cfg.processadora || '')}" placeholder="Ex.: H5 (etiqueta)" ${ro}></label>
-      <label class="campo"><span>Limite por régua (kW)</span><input inputmode="decimal" data-pc="kw_regua" data-k="${k('kw')}" value="${String(cfg.kw_regua).replace('.', ',')}" ${ro}></label>
-      <label class="campo"><span>Réguas por rack</span><input inputmode="numeric" data-pc="reguas_rack" data-k="${k('rr')}" value="${cfg.reguas_rack}" ${ro}></label>
-      <label class="campo"><span>Rack</span><select data-pc="rack" ${ro}>${Object.entries(M.RACKS).map(([id, s]) => `<option value="${id}" ${id === cfg.rack ? 'selected' : ''}>${s} saídas</option>`).join('')}</select></label>
-    </div>
-    ${pl && pl.dados.coluna_excede ? `<p class="dica amarelo">Uma coluna sozinha já passa do limite de pixels da porta — confira o cabeamento.</p>` : ''}
-    <p class="dica">${pl ? `Cada régua fecha colunas inteiras até ${B.num(cfg.kw_regua)} kW de consumo máximo (${B.num(pl.energia.w_coluna / 1000, 1)} kW por coluna). ` : ''}Mudou aqui, a lista muda junto: cabos de 20 m pelas portas, réguas e racks pela energia.</p>
-    ${pl ? `<button class="btn sm ver-folha">Ver a folha</button>` : ''}
-  </details>`;
+/* Linha "Projeto" de uma tela: o resumo do cabeamento (o desenho e os ajustes ficam no Projeto da sala) */
+function projetoHtml(ctx, it) {
+  const { B } = ctx;
+  const p1 = (n, s, p) => n + ' ' + (n === 1 ? s : p);
+  if (!it) return '';
+  const txt = it.pl
+    ? `${p1(it.pl.dados.portas.length, 'porta', 'portas')}${it.pl.dados.sentido === 'horizontal' ? ' (horizontal)' : ''} · ${p1(it.pl.energia.circuitos.length, 'circuito', 'circuitos')} · ${p1(it.pl.energia.reguas.length, 'régua', 'réguas')}${it.ctrl.item ? ' · ' + (it.ctrl.qtd > 1 ? it.ctrl.qtd + ' × ' : '') + NOME_CTRL[it.ctrl.item] : ''}`
+    : `${p1(it.portas, 'porta', 'portas')} (estimado — sem desenho em m²)`;
+  return `<div class="proj-linha">${B.ico('painel')} <b>Projeto</b> <span class="peq muted cresce">${txt}</span><button class="btn sm ir-projeto">Ver o projeto</button></div>`;
 }
 
 /* Palco e estrutura de uma tela no chão: a mesma conta do Calculator (mão francesa, pesos, segunda linha) */
@@ -67,31 +45,6 @@ function estruturaHtml(ctx, t, pode) {
     </div>` : ''}
     <div class="res">${resumo}</div>
   </div>`;
-}
-
-/* Prévia da folha inteira (igual ao PDF). */
-async function verFolha(ctx, lista, telaId) {
-  const { B } = ctx;
-  const folhas = folhasDaLista(ctx, lista, { hoje: ctx.hoje() });
-  let i = folhas.findIndex(f => f.tipo === 'tela' && f.grupo.telas.some(t => t.id === telaId));
-  if (i < 0) i = 0;
-  const caixa = { x: 0, y: 0, w: FOLHA.w, h: FOLHA.h };
-  const mostra = el => {
-    el.querySelector('.folha-svg').innerHTML = svgProjeto(primsDaFolha(ctx, lista, folhas[i]), caixa);
-    el.querySelector('.folha-n').textContent = `Folha ${i + 1} de ${folhas.length}`;
-  };
-  const r = await B.modal({
-    titulo: 'Projeto — ' + B.nomeLista(lista), largo: true,
-    corpo: `<div class="folha-svg proj-prev"></div>
-      <div class="linha-flex" style="margin-top:8px"><button class="btn sm ant">‹</button><span class="folha-n peq muted cresce" style="text-align:center"></span><button class="btn sm prox">›</button></div>`,
-    botoes: [{ txt: 'Fechar', valor: null }, { txt: 'Exportar PDF', cls: 'pri', valor: 'pdf' }],
-    aoAbrir: el => {
-      mostra(el);
-      el.querySelector('.ant').onclick = () => { i = (i - 1 + folhas.length) % folhas.length; mostra(el); };
-      el.querySelector('.prox').onclick = () => { i = (i + 1) % folhas.length; mostra(el); };
-    }
-  });
-  if (r === 'pdf') exportar(ctx, lista);
 }
 
 async function exportar(ctx, lista) {
@@ -129,7 +82,7 @@ async function gravarLinhas(ctx, atuais, novas) {
 export function planoDeRecalculo(ctx, lista) {
   const { M } = ctx;
   const atuais = ctx.linhasDa(lista.id);
-  const sug = M.calcularSugestoes(lista.telas || [], ctx.est.catalogo, ctx.regrasAtivas());
+  const sug = M.calcularSugestoes(lista.telas || [], ctx.est.catalogo, ctx.regrasAtivas(), { sala: lista.projeto });
   const r = M.aplicarSugestoes(atuais, sug.itens, { novoId: ctx.novoId, listaId: lista.id });
   return { atuais, sug, novas: r.linhas, diff: r.diff, temSep: atuais.some(M.temSeparacao) };
 }
@@ -169,6 +122,7 @@ export function render(ctx, [id]) {
   const diverg = M.divergencias(linhas);
   const erros = plano.sug.erros.filter(e => e.tipo === 'ciclo');
   const infoTela = new Map(plano.sug.telas.map(t => [t.id, t]));
+  const daSala = new Map(plano.sug.sala.telas.map(it => [it.tela.id, it]));
   const regraIdx = new Map(ctx.est.regras.map(r => [r.id, r]));
 
   /* ---- ações por status ---- */
@@ -229,7 +183,7 @@ export function render(ctx, [id]) {
       <div class="grade g2">${campos[t.modo || 'medida']}</div>
       <div class="res">${res}${b && b.gabinetes && b.colunas ? `<button class="btn sm ver-3d" style="margin-left:auto">${B.ico('painel')} Ver em 3D</button>` : ''}</div>
       ${(t.montagem || 'chao') === 'chao' && b && b.gabinetes ? estruturaHtml(ctx, t, pode) : ''}
-      ${b && b.gabinetes ? projetoHtml(ctx, t, pode) : ''}
+      ${b && b.gabinetes ? projetoHtml(ctx, daSala.get(t.id)) : ''}
     </div>`;
   }).join('');
 
@@ -293,7 +247,7 @@ export function render(ctx, [id]) {
     <label class="campo" style="margin-top:10px"><span>Observações</span><textarea data-lc="obs" data-k="l-obs" rows="2">${B.esc(lista.obs || '')}</textarea></label>
   </details>
 
-  <div class="card"><h2>Telas de LED <span class="conta">${(lista.telas || []).length}</span>${(lista.telas || []).length ? '<span class="dir"><button class="btn sm exportar-proj">' + B.ico('painel') + ' Exportar projeto (PDF)</button></span>' : ''}</h2>
+  <div class="card"><h2>Telas de LED <span class="conta">${(lista.telas || []).length}</span><span class="dir"><button class="btn sm ir-projeto">${B.ico('painel')} Projeto da sala</button></span></h2>
     ${telasHtml || '<p class="muted">Nenhuma tela. Adicione o painel e a medida — o sistema monta a lista.</p>'}
     ${pode ? `<button class="btn add-tela">${B.ico('add')} Adicionar tela</button>` : ''}
   </div>
@@ -439,23 +393,6 @@ export function ligar(el, ctx, [id]) {
         salvarLista({ telas: lista.telas }, { recalc: true });
       };
     });
-    // projeto da tela: mexeu aqui, a lista acompanha (portas → cabos 20 m; energia → réguas e racks)
-    const pj = box.querySelector('.projeto-tela');
-    if (pj) {
-      pj.addEventListener('toggle', () => { pj.open ? abertosProj.add(t.id) : abertosProj.delete(t.id); });
-      pj.querySelectorAll('[data-pc]').forEach(inp => {
-        inp.addEventListener('change', () => {
-          const campo = inp.dataset.pc;
-          let v = inp.value;
-          if (campo === 'backup') v = v === '1';
-          else if (['kw_regua', 'reguas_rack'].includes(campo)) { v = B.lerNum(v); if (!(v > 0)) { inp.classList.add('erro'); return; } }
-          t.projeto = Object.assign({}, t.projeto || {}, { [campo]: v });
-          salvarLista({ telas: lista.telas }, { recalc: campo !== 'processadora' });
-        });
-      });
-      const vf = pj.querySelector('.ver-folha');
-      if (vf) vf.onclick = () => verFolha(ctx, lista, t.id);
-    }
     const rm = box.querySelector('.rm-tela');
     if (rm) rm.onclick = async () => {
       if (!(await B.confirmar('Tirar esta tela?', `Os itens que vieram só dela saem da lista.`, { sim: 'Tirar', perigo: true }))) return;
@@ -576,8 +513,7 @@ export function ligar(el, ctx, [id]) {
   const reabrir = el.querySelector('.reabrir');
   if (reabrir) reabrir.onclick = () => salvarLista({ status: 'rascunho' });
   el.querySelector('.imprimir').onclick = () => imprimirLista(ctx, lista);
-  const ep = el.querySelector('.exportar-proj');
-  if (ep) ep.onclick = () => exportar(ctx, lista);
+  el.querySelectorAll('.ir-projeto').forEach(b => { b.onclick = () => ctx.ir('projeto/' + lista.id); });
   el.querySelector('.menu-lista').onclick = () => menuLista(ctx, lista);
 }
 

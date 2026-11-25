@@ -9,6 +9,8 @@ import * as Inicio from './ui/inicio.js';
 import * as Listas from './ui/listas.js';
 import * as Lista from './ui/lista.js';
 import * as Evento from './ui/evento.js';
+import * as Projsala from './ui/projsala.js';
+import * as Receber from './ui/receber.js';
 import * as Separar from './ui/separar.js';
 import * as Retorno from './ui/retorno.js';
 import * as Estoque from './ui/estoque.js';
@@ -24,7 +26,7 @@ const { esc, ico } = B;
 const raiz = document.getElementById('raiz');
 
 const ROTAS = {
-  inicio: Inicio, listas: Listas, lista: Lista, evento: Evento, separar: Separar, retorno: Retorno,
+  inicio: Inicio, listas: Listas, lista: Lista, evento: Evento, projeto: Projsala, receber: Receber, separar: Separar, retorno: Retorno,
   estoque: Estoque, item: Estoque, manutencao: Manutencao, bancada: Bancada,
   regras: Regras, catalogo: Catalogo, ajustes: Ajustes, equipe: Equipe
 };
@@ -136,8 +138,15 @@ async function atualizarCatalogo() {
   const faltam = base.filter(c => !atual.has(c.id));
   const contar = base.filter(c => ITENS_NOVOS.includes(c.id) && c.qtd != null && atual.has(c.id) && atual.get(c.id).qtd == null)
     .map(c => Object.assign({}, atual.get(c.id), { qtd: c.qtd }));
-  if (faltam.length || contar.length) {
+  // v4: "12 gabinetes por circuito" era o padrão chutado — vira "pelo consumo" (3,5 kW por circuito), como no projeto
+  const circ = D.estado.catalogo.filter(c => c.painel && +c.painel.por_circuito === 12)
+    .map(c => Object.assign({}, c, { painel: Object.assign({}, c.painel, { por_circuito: null }) }));
+  if (faltam.length || contar.length || circ.length) {
     if (!ctx.pode('catalogo')) return;
+    if (circ.length) {
+      await D.salvar('catalogo', circ, { silencioso: true });
+      await D.registrar('sistema', `gabinetes por circuito agora pelo consumo (até 3,5 kW por circuito): ${circ.map(c => c.nome).join(', ')}`);
+    }
     if (faltam.length) {
       await D.salvar('catalogo', faltam, { silencioso: true });
       await D.registrar('sistema', `acrescentou ao catálogo: ${faltam.map(c => c.nome + (c.qtd != null ? ' (' + c.qtd + ')' : '')).join(', ')}`);
@@ -404,7 +413,7 @@ function renderizar({ manterRolagem } = {}) {
   const sel = focoK && ativo.selectionStart != null ? [ativo.selectionStart, ativo.selectionEnd] : null;
 
   const mod = ROTAS[nome];
-  raiz.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === (nome === 'lista' || nome === 'evento' || nome === 'separar' || nome === 'retorno' ? 'listas' : nome === 'item' ? 'estoque' : nome)));
+  raiz.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === (nome === 'lista' || nome === 'evento' || nome === 'projeto' || nome === 'receber' || nome === 'separar' || nome === 'retorno' ? 'listas' : nome === 'item' ? 'estoque' : nome)));
   try {
     if (!Perm.podeAbrir(D.usuario, nome)) {
       main.innerHTML = `<div class="card vazio">${ico('lock')}<div><b>Sem acesso a esta tela.</b><br>Peça ao administrador para liberar.</div><button class="btn" style="margin-top:12px" onclick="location.hash='#/${Perm.telaInicial(D.usuario)}'">Voltar</button></div>`;

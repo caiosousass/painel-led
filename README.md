@@ -19,7 +19,7 @@ equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo o
 
 ## O fluxo
 
-1. **Lista** — *Nova lista*, *Importar OS (.xlsx ou .pdf)* ou *Duplicar uma anterior*. Informe o painel e a medida de
+1. **Projeto ou lista** — pelo *Projetech Calculator*, *Novo projeto*, *Nova lista*, *Importar OS (.xlsx ou .pdf)* ou *Duplicar uma anterior* (veja "Projeto e lista: quatro portas"). Informe o painel e a medida de
    cada tela (Plenária 12 × 4 m, Foyer 3 × 2 m…). O sistema monta a lista inteira. Cada item mostra o
    **por quê** ("84 gabinetes + 5% = 88,2 → 90"). Mudou a quantidade? Ela fica **fixa** e o recálculo não
    mexe mais. Tirou um item? Ele não volta sozinho.
@@ -56,22 +56,46 @@ equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo o
 
 Tudo o que acontece vai para o **registro de atividade** (quem, o quê, quando) que aparece no Início.
 
-## Projeto técnico (sinal e energia) — no estilo do projeto da Abbvie (OS 30469)
+## Projeto e lista: quatro portas, o mesmo lugar
 
-Cada tela da lista tem uma seção **Projeto**. Com a medida (L × A ou colunas × linhas) o sistema desenha:
+Antes: olhar a OS e a implantação → fazer a lista → fazer o projeto de AC e de sinal. Agora projeto e lista são
+**o mesmo registro** (a sala e as telas dela): mexeu num, o outro já está pronto.
 
-- **Sinal**: cada porta pega colunas inteiras até o limite de pixels (650 mil); uma cor por porta,
-  serpentina vertical a partir do canto escolhido, início verde e fim vermelho, etiqueta Novastar
-  (C · P · RV · WH) em cada gabinete. Cabo de dados: 1 por porta, ou 2 com **backup**.
-- **Energia**: cada régua Steck/Powercon fecha colunas inteiras até o **limite de consumo máximo**
-  (padrão 7,5 kW — reproduz o PDF da Abbvie) e desce até o rack; cada rack recebe até 4 réguas.
+- **Pelo Projetech Calculator**: monte a sala lá (screen única ou Múltiplas screens, palco, mão francesa,
+  cabeamento) e toque **Gerar lista no Painel de LED** (no card do projeto técnico). O Painel de LED abre com a
+  sala: confere os cases (o modelo do Calculator vira o case do catálogo) e escolhe **criar uma sala nova** ou
+  **atualizar** a que veio de lá antes. Os dados vão no endereço, depois do `#` — não passam por servidor.
+- **Novo projeto** (em Listas): desenha a sala aqui mesmo — as telas lado a lado, na ordem da folha.
+- **Nova lista**: o projeto da sala já existe — botão **Projeto da sala** na lista.
+- **Importar OS**: cria a lista e o projeto de uma vez e abre o projeto (OS com várias salas: abre o evento).
 
-**Exportar projeto (PDF)** gera uma folha por tela (telas iguais na mesma folha, como "Girassol 1, 2 e 3"),
-a folha de **Distribuição** (o material de cada tela) e o carimbo (projeto, local, tipo, responsável, data,
-OS, cliente e número da folha). Folha 16:9, como a de vocês.
+## Projeto técnico — o mesmo do Projetech Calculator
 
-**Projeto e lista andam juntos**: cabos RJ45 20 m saem das portas, réguas Steck/Powercon e racks saem da
-energia. Mudou a medida, o desenho muda; mudou o limite da régua, o backup ou o rack, a lista muda.
+As folhas são as do Calculator, desenhadas por **`js/cabeamento.js`, o mesmo arquivo nos dois apps**
+(`projetech/cabeamento.js`; um teste confere que são iguais). Folha A3 (ou 16:9, A4), moldura, cotas em metros e
+pixels, o painel em degradê com a grade e o carimbo Projetech (cases, gabinetes, peso, consumo, escala… +
+projeto, local, sala, responsável, datas, cliente, OS e folha).
+
+1. **Pixel map** — a imagem de teste (números das colunas, X, círculo e logo).
+2. **Cabeamento de sinal** — a seta do cabo na passagem entre os gabinetes e cada porta num círculo numerado;
+   embaixo, as portas de cada tela até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de pixels; ou
+   Taurus TB60 / TB1) e as controladoras até a **processadora** da sala.
+3. **Cabeamento de AC** — os circuitos de powercon em amarelo; cada circuito desce até a **régua** Steck/Powercon
+   (triângulo azul) e as réguas da **sala inteira** são repartidas nos **racks**.
+
+No Calculator, o projeto técnico ganha as folhas 2 e 3 no fim (chip *Folhas de cabeamento de sinal e de AC*).
+
+**As contas**: cada porta pega **linhas inteiras** (colunas na vertical, fileiras na horizontal) até o limite de
+pixels — e de gabinetes, se houver —, **repartidas por igual** (9 colunas com até 4 por porta → 3, 3, 3; o pixel
+map do Calculator agora reparte igual também). Linha que não cabe numa porta: a tela vira faixas iguais (fileira
+de 40 com limite 23 → 2 de 20). *Encher a porta* (o "Livre" do Calculator) = uma corrente só. O canto, o sentido e
+a serpentina vêm do Calculator; aqui, o automático escolhe o sentido que usa menos portas (empate: o que reparte
+por igual). Cada bloco de porta é um **circuito** (dividido se passar de 3,5 kW ou do máximo de gabinetes do
+painel — o NT 50×100 usa 3); a régua junta circuitos até **7,5 kW**; até 4 réguas por rack.
+
+**O que o projeto põe na lista**: RJ45 20 m (1 por porta, 2 com backup, + 1), powercon 10 m (1 por circuito, + 1),
+réguas Steck/Powercon, racks da sala, camlocks (5 por rack trifásico, 3 por rack de 5), controladoras (+ 1 de
+reserva por lista) e o cabo USB AB. Mão francesa e pesos vêm da estrutura (palco).
 
 ## Manutenção (controle semanal dos módulos)
 
@@ -92,8 +116,8 @@ fora do estoque até ser concluído (o conserto de painel entra também no contr
 - **Regras** = calibradas em ~30 telas das listas conferidas (`Desktop\Bagun\LISTAS (ATUALIZADO)`). Nas
   telas simples (e conferido contra as listas de outubro/2026: Amgen, Fico, L’Oréal, Sandoz, Vertex, Mulli) o sistema acerta os cases em 97% dos casos (±15%), réguas e pranchas em 100%/97%, jumpers em 87%.
   O Honda 6 × 3,5 m sai idêntico à lista conferida (é um dos testes automáticos).
-- **A confirmar**: gabinetes por circuito (**12**) e pixels por porta (**650.000**) — mudam os troncos de
-  10 m / 20 m. Ficam em Catálogo → item do painel.
+- **A confirmar**: pixels por porta (**650.000**) e o limite por circuito (**3,5 kW**) — mudam os cabos de 20 m e
+  de 10 m. Ficam em Catálogo → item do painel e no Projeto da sala.
 
 Tudo é editável: **Regras** (com simulador) e **Catálogo**.
 
@@ -139,8 +163,11 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/historico.js` | as listas conferidas, anônimas (só itens) — base do "costuma ir" |
 | `js/dados.js` | IndexedDB no aparelho + fila de envio + sincronização em tempo real com o Supabase |
 | `js/os.js` | lê o .xlsx da OS no navegador e tira cabeçalho, salas e painéis com medida |
-| `js/ui/projeto.js` | desenho do projeto técnico (sinal e energia) → prévia em SVG e PDF |
+| `js/cabeamento.js` | **compartilhado com o Calculator**: contas do cabeamento e as folhas do projeto técnico (SVG e PDF) |
+| `js/ui/projeto.js` | monta as folhas da sala com o que a lista sabe e exporta o PDF |
+| `js/ui/receber.js` | recebe a sala do Calculator ("Gerar lista no Painel de LED") |
+| `js/ui/projsala.js` | a tela Projeto da sala (começar pelo projeto) |
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 40 testes (critérios de aceite, Honda 6 × 3,5 m, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 68 testes (cabeamento igual ao do Calculator, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

@@ -1,4 +1,6 @@
-/* Tela: Listas (início do fluxo) — nova lista, importar OS, duplicar a anterior. */
+/* Tela: Listas (início do fluxo) — três portas que dão no mesmo lugar: começar pelo PROJETO (desenha a sala e a
+ * lista sai sozinha), pela LISTA (o projeto da sala já existe) ou IMPORTAR a OS (cria as duas de uma vez).
+ * Mais duplicar uma anterior. */
 import { lerXlsx, abasDoPdf, interpretarOS } from '../os.js';
 import { textoDoPdf } from '../pdf.js';
 import { recalcularLista } from './lista.js';
@@ -75,11 +77,13 @@ export function render(ctx) {
   }
   return `
   <div class="cab"><div><h1>Listas</h1><div class="sub">Uma lista por evento — ou uma por sala, quando o evento tem salas ou hotéis separados. Monta, separa no galpão e confere a volta.</div></div></div>
-  ${ctx.pode('listas') ? `<div class="grade g3 m1" style="margin-bottom:14px">
-    <button class="btn pri grande nova">${B.ico('add')} Nova lista</button>
+  ${ctx.pode('listas') ? `<div class="grade g4 m1" style="margin-bottom:6px">
+    <button class="btn pri grande novo-projeto">${B.ico('painel')} Novo projeto</button>
+    <button class="btn grande nova">${B.ico('add')} Nova lista</button>
     <button class="btn grande importar">${B.ico('upload')} Importar OS (.xlsx ou .pdf)</button>
     <button class="btn grande duplicar">${B.ico('copy')} Duplicar uma anterior</button>
-  </div>` : ''}
+  </div>
+  <p class="dica" style="margin:0 0 14px">Projeto e lista andam juntos: comece pelo desenho da sala e a lista sai pronta — ou pela lista, e o projeto já está lá. Importando a OS, sai tudo de uma vez.</p>` : ''}
   <input type="file" accept=".xlsx,.pdf,application/pdf" class="arq-os" hidden>
   <div class="abas" style="margin-bottom:10px">
     ${[['abertas', 'Abertas'], ['evento', 'No evento'], ['retornadas', 'Retornadas'], ['todas', 'Todas']].map(([k, t]) => `<button data-f="${k}" class="${filtro === k ? 'on' : ''}">${t} (${conta(k)})</button>`).join('')}
@@ -100,6 +104,7 @@ export function ligar(el, ctx) {
   });
   if (!ctx.pode('listas')) return;
   el.querySelector('.nova').onclick = () => novaLista(ctx);
+  el.querySelector('.novo-projeto').onclick = () => novaLista(ctx, null, { abrir: 'projeto' });
   el.querySelector('.duplicar').onclick = () => duplicarAnterior(ctx);
   const arq = el.querySelector('.arq-os');
   el.querySelector('.importar').onclick = () => arq.click();
@@ -112,7 +117,7 @@ export function novaTela(ctx, extra) {
   return Object.assign({ id: ctx.novoId(), nome: '', painel: padrao ? padrao.id : null, modo: 'medida', largura_m: null, altura_m: null, colunas: null, linhas: null, m2: null, gabinetes: null, montagem: 'chao' }, extra || {});
 }
 
-export async function novaLista(ctx, dados) {
+export async function novaLista(ctx, dados, { abrir } = {}) {
   const lista = Object.assign({
     id: ctx.novoId(), os: '', evento: '', cliente: '', local: '', ida: null, volta: null, obs: '',
     status: 'rascunho', telas: [novaTela(ctx)], criada_em: ctx.agora(), criada_por: ctx.quem(), sep: null, conf: null, ret: null
@@ -120,7 +125,7 @@ export async function novaLista(ctx, dados) {
   await ctx.D.salvar('listas', lista);
   await ctx.D.registrar('lista_criada', lista.evento ? `criou a lista ${ctx.B.nomeLista(lista)}` : 'criou uma lista nova', lista.id);
   if (lista.telas.some(t => t.largura_m || t.gabinetes || t.colunas || t.m2)) await recalcularLista(ctx, lista, { forcar: true });
-  ctx.ir('lista/' + lista.id);
+  ctx.ir((abrir === 'projeto' ? 'projeto/' : 'lista/') + lista.id);
 }
 
 async function duplicarAnterior(ctx) {
@@ -211,7 +216,7 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
       };
     },
     botoes: [{ txt: 'Cancelar', valor: null }, {
-      txt: 'Criar lista', cls: 'pri',
+      txt: 'Criar lista e projeto', cls: 'pri',
       validar: el => {
         const semPainel = [...el.querySelectorAll('.tela[data-i]')].filter(d => d.querySelector('.f-usa').checked && !d.querySelector('.f-painel').value);
         semPainel.forEach(d => d.querySelector('.f-painel').classList.add('erro'));
@@ -246,7 +251,13 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
   if (!porSala) {
     res.telas = escolhidas.length ? escolhidas.map(e => tela(e, e.t.nome)) : [novaTela(ctx)];
     res.obs = obsDe(info.outros, fora, null);
-    return novaLista(ctx, res);
+    // tudo numa sala só: ela vira o título do projeto ("Plenária"), e as telas ficam com o nome curto
+    const salasEsc = [...new Set(escolhidas.map(e => normSala(e.t.sala)).filter(Boolean))];
+    if (salasEsc.length === 1) {
+      res.sala = escolhidas.find(e => e.t.sala).t.sala;
+      res.telas.forEach((t, i) => { if (escolhidas[i].t.nome_curto) t.nome = escolhidas[i].t.nome_curto; });
+    }
+    return novaLista(ctx, res, { abrir: escolhidas.length ? 'projeto' : 'lista' });
   }
   // evento: uma lista por sala que tem tela marcada; outros itens e painéis de fora vão para a sala deles
   // (ou para a primeira sala, com o nome da sala de origem, quando a sala deles não virou lista)

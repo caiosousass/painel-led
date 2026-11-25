@@ -205,7 +205,8 @@ test('regras da casa no Honda 6 × 3,5 m reproduzem a lista conferida', () => {
   assert.equal(q('regua-pc'), 2);
   assert.equal(q('rj-20m'), 5); // 4 portas + 1 reserva
   assert.equal(q('rack-9'), 1);
-  assert.equal(q('camlock-150'), 5);
+  // a lista antiga levou 5 (só o rack 9); hoje vai também o rack 5 do processamento, com 3 camlocks (Borges e Costa, nov/2026: 8)
+  assert.equal(q('camlock-150'), 8);
   assert.equal(q('peso'), 20);
 });
 
@@ -415,7 +416,7 @@ test('projeto: Girassol 6 × 3,5 m e Ipês 35 × 4,5 m como no PDF da Abbvie (OS
   assert.equal(r.itens.get('rj-20m').qtd, 9); // 4 portas × 2 + 1
   // mexer no limite da régua muda a lista
   const r2 = M.calcularSugestoes([{ id: 't', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3.5, montagem: 'chao', projeto: { kw_regua: 4 } }], cat, regrasIniciais());
-  assert.equal(r2.itens.get('regua-pc').qtd, 3); // 4 colunas por régua
+  assert.equal(r2.itens.get('regua-pc').qtd, 4); // cada circuito (bloco de 3 colunas, 2,8 kW) numa régua
 });
 
 test('distribuição por tela: segue as origens e reparte a quantidade editada na mesma proporção', () => {
@@ -542,4 +543,73 @@ test('relatório: evolução por semana, período anterior e relatório de um t�
   assert.deepEqual(ze.semanasSemRegistro.map(s => s.de), ['2026-10-01', '2026-10-12', '2026-10-26']);
   assert.equal(M.relatorioManutencao({ manutlog, manutencoes }, { de: '2026-10-01', ate: '2026-10-31', tecnico: 'Ana' }).fila.concluidas.length, 1);
   assert.equal(M.relatorioManutencao({ manutlog }, { de: '2026-10-01', ate: '2026-10-07' }).escala, 'dia');
+});
+
+test('projeto da sala: Plenária da Syngenta (laterais 4,5 × 2,5 m + central 18 × 3,5 m, V10)', () => {
+  const cat = catalogoInicial();
+  const telas = [
+    { id: 'le', nome: 'Lateral esq.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5, montagem: 'chao' },
+    { id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 18, altura_m: 3.5, montagem: 'chao' },
+    { id: 'ld', nome: 'Lateral dir.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5, montagem: 'chao' }
+  ];
+  const ps = M.planoSala(telas, cat);
+  const [le, c] = ps.telas;
+  // sinal: laterais 9 colunas → 3 portas de 3 colunas (repartido por igual, não 4 + 4 + 1); central 36 → 12 de 3
+  assert.equal(le.pl.dados.sentido, 'vertical');
+  assert.deepEqual(le.pl.dados.portas.map(p => p.cols.length), [3, 3, 3]);
+  assert.deepEqual(c.pl.dados.portas.map(p => p.gabinetes), Array(12).fill(21));
+  // energia: cada bloco é um circuito; a lateral fecha 1 régua (3 circuitos), a central 6 réguas de 2
+  assert.equal(le.pl.energia.circuitos.length, 3);
+  assert.deepEqual(le.pl.energia.reguas.map(r => r.circuitos.length), [3]);
+  assert.deepEqual(c.pl.energia.reguas.map(r => r.circuitos.length), [2, 2, 2, 2, 2, 2]);
+  // racks da sala: 8 réguas → 2 racks de 4 (lateral esq. + metade da central | metade + lateral dir.)
+  assert.deepEqual(ps.racks.map(r => r.reguas.map(x => x.tela + '.' + x.n).join(' ')), ['0.1 1.1 1.2 1.3', '1.4 1.5 1.6 2.1']);
+  // a lista sai do projeto: 2 racks (não 4); 18 circuitos e 18 portas, + 1 de reserva por tela
+  const r = M.calcularSugestoes(telas, cat, regrasIniciais());
+  const q = id => (r.itens.get(id) || { qtd: 0 }).qtd;
+  assert.equal(q('rack-9'), 2);
+  assert.equal(q('regua-pc'), 8);
+  assert.equal(q('pc-10m'), 21);
+  assert.equal(q('rj-20m'), 21);
+  assert.equal(q('send-660'), 4 + 1 + 1 + 1); // central: 12 portas, mas 7,1 milhões de px → 4 (2,3 mi cada); laterais 1 cada; + 1 reserva
+  // um rack por tela, se a sala pedir
+  const r2 = M.calcularSugestoes(telas, cat, regrasIniciais(), { sala: { racks: 'tela' } });
+  assert.equal((r2.itens.get('rack-9') || {}).qtd, 4);
+});
+
+test('projeto: Foyer 4 × 3 m sai na horizontal (3 portas de 2 fileiras), como no desenho da Syngenta', () => {
+  const V10 = catalogoInicial().find(c => c.id === 'led-v10').painel;
+  const pl = M.planoProjeto({ painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 3 }, V10);
+  assert.equal(pl.dados.sentido, 'horizontal');
+  assert.deepEqual(pl.dados.portas.map(p => p.gabinetes), [16, 16, 16]);
+  // a 1ª porta sai embaixo à esquerda, vai para a direita e volta pela fileira de cima
+  assert.deepEqual(pl.dados.portas[0].caminho.slice(0, 2), [[0, 5], [1, 5]]);
+  assert.deepEqual(pl.dados.portas[0].caminho.slice(7, 10), [[7, 5], [7, 4], [6, 4]]);
+  // forçar vertical: 3, 3 e 2 colunas
+  const v = M.planoProjeto({ painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 3, projeto: { sentido: 'vertical' } }, V10);
+  assert.deepEqual(v.dados.portas.map(p => p.cols.length), [3, 3, 2]);
+});
+
+test('lista Borges e Costa (3,5 × 2 m V10): controladora + reserva, USB, rack 9 + rack 5 com 8 camlocks', () => {
+  const r = M.calcularSugestoes([{ id: 't', painel: 'led-v10', modo: 'medida', largura_m: 3.5, altura_m: 2, montagem: 'chao', palco: { sobre: true, altura_m: 0.5, mf: 'chao' } }], catalogoInicial(), regrasIniciais());
+  const q = id => (r.itens.get(id) || { qtd: 0 }).qtd;
+  assert.equal(q('send-660'), 2);
+  assert.equal(q('usb-ab'), 1);
+  assert.equal(q('rack-9'), 1);
+  assert.equal(q('rack-5'), 1);
+  assert.equal(q('camlock-150'), 8);
+  assert.equal(q('mf-144') + q('mf-096'), 6);
+  assert.equal(q('peso'), 9);
+});
+
+test('circuito: bloco que passa do limite se divide em colunas inteiras (P3.9 39 gab/porta; NT 50×100 1 por coluna)', () => {
+  const cat = catalogoInicial();
+  const p39 = cat.find(c => c.id === 'led-p39-l1').painel;
+  const pl = M.planoProjeto({ painel: 'led-p39-l1', modo: 'grade', colunas: 6, linhas: 6 }, p39);
+  // 650.000 px ÷ (6 × 16.384) → 6 colunas numa porta (36 gab, 4,6 kW) → 2 circuitos de 3 colunas
+  assert.equal(pl.dados.portas.length, 1);
+  assert.deepEqual(pl.energia.circuitos.map(c => c.gabinetes), [18, 18]);
+  const nt2 = cat.find(c => c.id === 'led-nt-50x100').painel;
+  const lo = M.planoProjeto({ painel: 'led-nt-50x100', modo: 'medida', largura_m: 6, altura_m: 3 }, nt2);
+  assert.equal(lo.energia.circuitos.length, 12);
 });
