@@ -2,6 +2,7 @@
 import { novaTela } from './listas.js';
 import { imprimirLista } from './imprimir.js';
 import { novaSala } from './evento.js';
+import { abrir3D } from './tres.js';
 import { HISTORICO } from '../historico.js';
 import { desenhoTela, svg as svgProjeto, folhasDaLista, primsDaFolha, exportarProjeto, FOLHA } from './projeto.js';
 
@@ -39,6 +40,33 @@ function projetoHtml(ctx, t, pode) {
     <p class="dica">${pl ? `Cada régua fecha colunas inteiras até ${B.num(cfg.kw_regua)} kW de consumo máximo (${B.num(pl.energia.w_coluna / 1000, 1)} kW por coluna). ` : ''}Mudou aqui, a lista muda junto: cabos de 20 m pelas portas, réguas e racks pela energia.</p>
     ${pl ? `<button class="btn sm ver-folha">Ver a folha</button>` : ''}
   </details>`;
+}
+
+/* Palco e estrutura de uma tela no chão: a mesma conta do Calculator (mão francesa, pesos, segunda linha) */
+function estruturaHtml(ctx, t, pode) {
+  const { B, M } = ctx;
+  const c = ctx.item(t.painel);
+  const est = c && c.painel ? M.estruturaTela(t, c.painel) : null;
+  const pl = t.palco || {};
+  const ro = pode ? '' : 'disabled';
+  const v = x => (x == null || x === '' ? '' : String(x).replace('.', ','));
+  const m = x => B.num(x).replace(/^(\d+)$/, '$1');
+  const resumo = !est ? '<span class="mut2">Painel mais baixo que 0,96 m: sem mão francesa.</span>'
+    : `<span><b>${est.fileiras} fileiras</b> de mão francesa</span>
+       <span>${est.pilha.map(h => B.num(h)).join(' + ')} m${est.segunda_linha ? ' <b class="amarelo">+ segunda linha (1,92)</b>' : ''}</span>
+       <span><b>${est.pesos} pesos</b> por fileira</span>
+       <span class="mut2">alcança ${B.num(est.alto)} m ${est.noPalco ? 'apoiada no palco' : est.sobre ? 'saindo do chão, atrás do palco' : 'do chão'}</span>
+       ${est.raso ? '<span class="amarelo">palco com menos de 0,80 m de fundo: ela vai no chão</span>' : ''}`;
+  return `<div class="estrutura-tela">
+    <label class="linha-flex peq" style="margin-bottom:8px"><input type="checkbox" data-pal="sobre" ${pl.sobre ? 'checked' : ''} ${ro} style="width:20px;height:20px"> Painel em cima do palco</label>
+    ${pl.sobre ? `<div class="grade g3 m1" style="margin-bottom:8px">
+      <label class="campo"><span>Altura do palco (m)</span><input inputmode="decimal" data-pal="altura_m" data-k="pal-${B.esc(t.id)}-a" value="${v(pl.altura_m)}" placeholder="Ex.: 0,60" ${ro}></label>
+      <label class="campo"><span>Fundo do palco (m)</span><input inputmode="decimal" data-pal="fundo_m" data-k="pal-${B.esc(t.id)}-f" value="${v(pl.fundo_m)}" placeholder="opcional" ${ro}></label>
+      <label class="campo"><span>Mão francesa apoia</span><select data-pal="mf" ${ro}>
+        <option value="chao">No chão, atrás do palco</option><option value="palco" ${pl.mf === 'palco' ? 'selected' : ''}>No palco</option></select></label>
+    </div>` : ''}
+    <div class="res">${resumo}</div>
+  </div>`;
 }
 
 /* Prévia da folha inteira (igual ao PDF). */
@@ -199,7 +227,8 @@ export function render(ctx, [id]) {
       </div>
       <div class="abas" style="margin:10px 0">${Object.entries({ medida: 'L × A', grade: 'Col × lin', m2: 'm²', gabinetes: 'Gab.' }).map(([kk, vv]) => `<button data-modo="${kk}" class="${(t.modo || 'medida') === kk ? 'on' : ''}" ${ro}>${vv}</button>`).join('')}</div>
       <div class="grade g2">${campos[t.modo || 'medida']}</div>
-      <div class="res">${res}</div>
+      <div class="res">${res}${b && b.gabinetes && b.colunas ? `<button class="btn sm ver-3d" style="margin-left:auto">${B.ico('painel')} Ver em 3D</button>` : ''}</div>
+      ${(t.montagem || 'chao') === 'chao' && b && b.gabinetes ? estruturaHtml(ctx, t, pode) : ''}
       ${b && b.gabinetes ? projetoHtml(ctx, t, pode) : ''}
     </div>`;
   }).join('');
@@ -374,6 +403,18 @@ export function ligar(el, ctx, [id]) {
   el.querySelectorAll('.tela[data-t]').forEach(box => {
     const t = (lista.telas || []).find(x => x.id === box.dataset.t);
     if (!t) return;
+    const v3 = box.querySelector('.ver-3d');
+    if (v3) v3.onclick = () => abrir3D(ctx, lista, t);
+    // palco da tela (muda a mão francesa e os pesos)
+    box.querySelectorAll('[data-pal]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const campo = inp.dataset.pal;
+        let v = inp.type === 'checkbox' ? inp.checked : inp.value;
+        if (campo === 'altura_m' || campo === 'fundo_m') { v = B.lerNum(v); if (v != null && !(v >= 0 && v < 10)) { inp.classList.add('erro'); return; } }
+        t.palco = Object.assign({ sobre: false, altura_m: null, fundo_m: null, mf: 'chao' }, t.palco || {}, { [campo]: v });
+        salvarLista({ telas: lista.telas }, { recalc: true });
+      });
+    });
     box.querySelectorAll('[data-tc]').forEach(inp => {
       inp.addEventListener('change', () => {
         const campo = inp.dataset.tc;

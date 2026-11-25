@@ -426,3 +426,14 @@ input[type=search]{background:var(--campo);border:1px solid var(--line);border-r
 .rel-barra b{font-size:15px}
 .rel-papel{max-width:860px;margin:0 auto;background:#fff;border-radius:10px;padding:28px 30px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
 @media (max-width:640px){.rel-papel{padding:16px 14px}.rel-papel .rel .tiles{grid-template-columns:1fr 1fr}.rel-papel .rel .duas{grid-template-columns:1fr}.rel-papel .rel .mini{grid-template-columns:1fr 1fr}}
+/* palco e estrutura da tela */
+.estrutura-tela{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+/* 3D da tela (o visor do Calculator) */
+.tres-tela{position:fixed;inset:0;z-index:70;background:#0d1117;display:flex;flex-direction:column}
+.tres-barra{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:rgba(13,17,23,.96);border-bottom:1px solid #222a36;color:#e8edf5}
+.tres-barra .peq{color:#9aa6b8}
+.tres-barra .tres-resumo{margin-top:2px}
+.tres-barra .abas button{padding:6px 10px}
+.tres-barra .btn.on{border-color:var(--acc);color:var(--acc)}
+.tres-cv{flex:1;width:100%;min-height:0;display:block;touch-action:none;cursor:grab}
+.tres-dica{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:#9aa6b8;pointer-events:none}

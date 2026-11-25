@@ -180,7 +180,7 @@ const P19_CHAPINHA = ['led-p19', 'led-p19-q'];
 
 /* Sobe a cada mudança nas regras padrão: aparelhos com as regras antigas (e não editadas) se atualizam sozinhos.
  * 3 = réguas, racks e cabos de dados vêm do projeto da tela (13/10/2026). */
-export const VERSAO_REGRAS = 5; // 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10
+export const VERSAO_REGRAS = 6; // 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10 · 6: estrutura do Calculator (palco, pesos por metro, segunda linha)
 
 export function regrasIniciais() {
   const r = [
@@ -199,12 +199,12 @@ export function regrasIniciais() {
     R({ item: 'prol-media', base: 'item:regua-pc', fator: 1.5, adicional: 2, maximo: 24, obs: 'Prolonga do rack até a régua: ≈ 1,5 por régua + 2, até 24.' }),
     R({ item: 'prol-longa', base: 'item:regua-pc', fator: 0.25, arred: 'baixo', maximo: 4, obs: '1 prolonga longa a cada 4 réguas, até 4.' }),
 
-    R({ item: 'mf-192', base: 'mf_192', montagens: CHAO, obs: 'Peças de 1,92 m: cada apoio empilha peças até a altura do painel.' }),
-    R({ item: 'mf-144', base: 'mf_144', montagens: CHAO, obs: 'Peças de 1,44 m (3,5 m = 1,92 + 1,44; 4,5 m = 1,92 + 1,44 + 0,96).' }),
+    // Mão francesa e pesos: a regra da equipe, a mesma do Projetech Calculator (motor.estruturaTela), com o palco
+    R({ item: 'mf-192', base: 'mf_192', montagens: CHAO, obs: 'Peças de 1,92 m: cada fileira empilha peças (a maior embaixo) até o mais perto do topo do painel, sem passar — a partir de onde ela apoia (chão ou palco). A partir de 4,5 m de altura, a 1,92 da base vai em segunda linha (dobrada para trás).' }),
+    R({ item: 'mf-144', base: 'mf_144', montagens: CHAO, obs: 'Peças de 1,44 m (3,5 m = 1,92 + 1,44; 4,6 m = 1,92 + 1,44 + 0,96).' }),
     R({ item: 'mf-096', base: 'mf_096', montagens: CHAO, obs: 'Peças de 0,96 m (3 m = 1,92 + 0,96).' }),
-    R({ item: 'mf-192', base: 'apoios', montagens: CHAO, cond: { base: 'altura_m', op: '>=', valor: 5 }, obs: 'Reforço em painel a partir de 5 m: +1 peça de 1,92 por apoio (Galderma 12×5, CAV 44×5,5).' }),
     R({ item: 'par-mf', base: 'itens:mf-192,mf-144,mf-096', fator: 2, multiplo: 10, montagens: CHAO, obs: '2 parafusos por peça de mão francesa, em dezenas.' }),
-    R({ item: 'peso', base: 'itens:mf-192,mf-144,mf-096', fator: 2, teto: { base: 'apoios', fator: 5 }, montagens: CHAO, obs: '2 pesos por peça de mão francesa, no máximo 5 por apoio (Amgen 15×2 → 22; Honda 6×3,5 → 20; Galderma 12×5 → 45; Fico → 110).' }),
+    R({ item: 'peso', base: 'pesos', montagens: CHAO, obs: 'Em cada fileira, 1 peso a cada 1 m da altura que ela alcança (de onde apoia até o topo do painel), arredondando normal: 3,5 m → 4; 4,6 m → 5. Regra da equipe, a mesma do Calculator.' }),
     R({ item: 'prancha', base: 'apoios', adicional: -2, minimo: 1, montagens: CHAO, obs: 'Pranchas de 1,5 m: apoios − 2 (Honda 6 m → 3; Prati 12 m → 7; Amgen 15 m → 9).' }),
     R({ item: 'barra-mf', base: 'apoios', adicional: -2, minimo: 1, montagens: CHAO, obs: 'Barra de apoio da mão francesa: nas listas de out/2026 vai junto com a prancha, mesma quantidade (Fico 11/11, SA+ 8/8). Confirmar.' }),
     R({ item: 'cunha', base: 'colunas', fator: 1.2, multiplo: 5, montagens: CHAO, obs: 'Cunha para nivelar: ≈ 1,2 por coluna, de 5 em 5 (Amgen 30 col. → 30; Lopes 28 → 30; Mulli 10 → 20).' })

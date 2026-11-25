@@ -151,16 +151,43 @@ test('regra encadeada: item derivado dispara outra regra', () => {
   assert.equal(qtd(r, 'saco'), 43);
 });
 
-test('mão francesa: peças empilhadas até a altura do painel', () => {
-  const p = h => { const x = M.pecasMaoFrancesa(h / 0.5); return [x.p192, x.p144, x.p096]; };
-  assert.deepEqual(p(3), [1, 0, 1]);    // 1,92 + 0,96
-  assert.deepEqual(p(3.5), [1, 1, 0]);  // 1,92 + 1,44
-  assert.deepEqual(p(4), [2, 0, 0]);
-  assert.deepEqual(p(4.5), [1, 1, 1]);  // 1,92 + 1,44 + 0,96
-  assert.deepEqual(p(5), [2, 0, 1]);
-  assert.deepEqual(p(5.5), [2, 1, 0]);
+test('mão francesa: a pilha do Calculator (mais perto do topo sem passar, a maior embaixo)', () => {
+  const p = h => M.pilhaMaoFrancesa(h).pilha.join(' + ');
+  assert.equal(p(3), '1.92 + 0.96');
+  assert.equal(p(3.5), '1.92 + 1.44');
+  assert.equal(p(4), '1.92 + 1.92');
+  assert.equal(p(4.6), '1.92 + 1.44 + 0.96');   // painel central do desenho: 4 m sobre palco de 0,60
+  assert.equal(p(5), '1.92 + 1.92 + 0.96');
+  assert.equal(M.pilhaMaoFrancesa(0.9), null);    // mais baixo que 0,96: sem mão francesa
+  // fileiras: emenda a emenda, de 1,5 em 1,5 m, as duas pontas sempre
+  assert.deepEqual(M.fileirasMaoFrancesa(6, 0.5), [0.5, 2, 3.5, 5, 5.5]);
+  assert.equal(M.fileirasMaoFrancesa(8, 0.5).length, 6);
+  assert.equal(M.fileirasMaoFrancesa(20, 0.5).length, 14);
 });
 
+test('estrutura com palco e segunda linha (desenho da equipe: central 4 m sobre palco 0,60; laterais 4,5 m)', () => {
+  const V10 = { larg_m: 0.5, alt_m: 0.5 };
+  const est = (palco, h = 4) => M.estruturaTela({ montagem: 'chao', modo: 'medida', largura_m: 6, altura_m: h, palco }, V10);
+  // central: mão francesa sai do chão, atrás do palco → alcança 4,60 m: 1,92 + 1,44 + 0,96, segunda linha, 5 pesos
+  const c = est({ sobre: true, altura_m: 0.6, mf: 'chao' });
+  assert.equal(c.alto, 4.6);
+  assert.deepEqual(c.pilha, [1.92, 1.44, 0.96]);
+  assert.equal(c.segunda_linha, true);
+  assert.equal(c.pesos, 5);
+  // a mesma, apoiada no palco (fundo de 2 m): o palco não conta → 4 m, sem segunda linha, 4 pesos
+  const p = est({ sobre: true, altura_m: 0.6, fundo_m: 2, mf: 'palco' });
+  assert.equal(p.alto, 4);
+  assert.equal(p.noPalco, true);
+  assert.equal(p.segunda_linha, false);
+  assert.equal(p.pesos, 4);
+  // palco raso (0,70 m de fundo): não cabe, ela vai no chão
+  const r = est({ sobre: true, altura_m: 0.6, fundo_m: 0.7, mf: 'palco' });
+  assert.equal(r.raso, true);
+  assert.equal(r.alto, 4.6);
+  // lateral de 4,5 m no chão: segunda linha também
+  assert.equal(est(null, 4.5).segunda_linha, true);
+  assert.equal(M.estruturaTela({ montagem: 'aereo', modo: 'medida', largura_m: 6, altura_m: 3 }, V10), null);
+});
 test('regras da casa no Honda 6 × 3,5 m reproduzem a lista conferida', () => {
   const cat = catalogoInicial(), regras = regrasIniciais();
   const r = M.calcularSugestoes([{ id: 't', nome: 'Plenária', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3.5, montagem: 'chao' }], cat, regras);
@@ -316,24 +343,30 @@ test('alertas da supervisão: carga próxima, sem conferência, retorno atrasado
   assert.deepEqual(tipos, ['carga_proxima', 'manutencao_parada', 'perda', 'retorno_atrasado', 'sem_conferencia']);
 });
 
-test('teto: pesos = 2 por peça de mão francesa, no máximo 5 por apoio', () => {
+test('listas com a estrutura do Calculator: pesos por metro, segunda linha e palco', () => {
   const cat = catalogoInicial(), regras = regrasIniciais();
-  const q = (w, h, painel = 'led-v10') => {
-    const r = M.calcularSugestoes([{ id: 't', painel, modo: 'medida', largura_m: w, altura_m: h, montagem: 'chao' }], cat, regras);
+  const q = (w, h, painel = 'led-v10', extra = {}) => {
+    const r = M.calcularSugestoes([Object.assign({ id: 't', painel, modo: 'medida', largura_m: w, altura_m: h, montagem: 'chao' }, extra)], cat, regras);
     return id => (r.itens.get(id) || { qtd: 0, origens: [] });
   };
-  const amgen = q(15, 2);          // OS 34367: 11 peças de 1,92 → 22 pesos
+  const amgen = q(15, 2);          // OS 34367: 11 fileiras de 1,92, 2 pesos cada → 22 (igual à lista)
   assert.equal(amgen('mf-192').qtd, 11);
   assert.equal(amgen('peso').qtd, 22);
-  const galderma = q(12, 5);       // 36 peças → 72, mas 9 apoios × 5 = 45
+  const galderma = q(12, 5);       // 9 fileiras × (1,92 + 1,92 + 0,96) + segunda linha → 27 de 1,92; 5 pesos cada → 45
+  assert.equal(galderma('mf-192').qtd, 27);
+  assert.equal(galderma('mf-096').qtd, 9);
   assert.equal(galderma('peso').qtd, 45);
-  assert.deepEqual(galderma('peso').origens[0].teto, { base: 'apoios', valor: 9, fator: 5, limite: 45 });
+  // painel de 4 m sobre palco de 0,60 com a mão francesa no chão: alcança 4,60 → pilha maior, segunda linha
+  const central = q(6, 4, 'led-v10', { palco: { sobre: true, altura_m: 0.6, mf: 'chao' } });
+  assert.equal(central('mf-192').qtd, 10);   // 5 fileiras × (1 + segunda linha)
+  assert.equal(central('mf-144').qtd, 5);
+  assert.equal(central('mf-096').qtd, 5);
+  assert.equal(central('peso').qtd, 25);
   const loreal = q(6, 3, 'led-nt-50x100'); // NT 50×100: jumper de 1,5 m, 1 tronco por coluna
   assert.equal(loreal('pc-15').qtd, 40);
   assert.equal(loreal('pc-1m').qtd, 0);
   assert.equal(loreal('pc-10m').qtd, 13);
 });
-
 test('manutenção semanal: resumo por ação, painel e defeito; alerta se chega quinta sem registro', () => {
   assert.equal(M.D.inicioSemana('2026-10-13'), '2026-10-12'); // terça → segunda
   assert.equal(M.D.inicioSemana('2026-10-18'), '2026-10-12'); // domingo ainda é a mesma semana

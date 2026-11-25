@@ -10,7 +10,7 @@
 
 export const FOLHA = { w: 406.4, h: 228.6 }; // 16:9, como o projeto da Abbvie
 const MM_PT = 0.3528;
-const CORES = ['#7fd17f', '#8b8ff2', '#f2e35c', '#f3a862', '#f29191', '#90baf2', '#c9baf6', '#f8c9d7', '#dceef8', '#5fd8ca', '#e290ea', '#a6d873'];
+export const CORES = ['#7fd17f', '#8b8ff2', '#f2e35c', '#f3a862', '#f29191', '#90baf2', '#c9baf6', '#f8c9d7', '#dceef8', '#5fd8ca', '#e290ea', '#a6d873'];
 
 const n2 = v => String(+(+v).toFixed(2)).replace('.', ',');
 const larguraTexto = (txt, pt, bold) => String(txt).length * pt * MM_PT * (bold ? 0.56 : 0.5);

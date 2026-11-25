@@ -36,6 +36,14 @@ equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo o
      sala*, *Nova sala neste evento*; numa lista solta: *Dividir em salas*. OS, nome e cliente mudam em todas
      as salas; datas e local podem ser diferentes por sala (o app pergunta). Itens "por lista" (ferramentas,
      fita, cinta, rack 5…) vão para **cada sala**, porque cada uma é carregada à parte.
+   - **Estrutura e palco (a mesma regra do Projetech Calculator)**: em cada tela no chão, marque se o painel
+     está **em cima do palco** (altura, fundo e se a mão francesa apoia no palco ou sai do chão, atrás dele).
+     A mão francesa empilha 1,92 / 1,44 / 0,96 até o mais perto do topo sem passar; fileiras nas emendas, de
+     1,5 em 1,5 m e nas pontas; **1 peso por metro** de altura por fileira; a partir de **4,5 m** a 1,92 da
+     base vai em **segunda linha** (dobrada para trás).
+   - **Ver em 3D**: o visor do Calculator (`vendor/ar.js`) mostra a tela com as placas, o palco, a mão
+     francesa, os pesos, uma pessoa de referência e o **mapa do cabeamento** pintado na frente (cada porta
+     com a sua cor). Vistas de frente, trás, lado e topo, medidas e AR no iPhone.
    - **Costuma ir e não está aqui**: compara com as listas antigas do mesmo painel.
    - **Falta no estoque**: cruza com as outras listas nas mesmas datas e com o que está na manutenção.
 2. **Liberar para separação** — o sistema avisa antes o que parece esquecido.

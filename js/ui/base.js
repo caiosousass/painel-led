@@ -60,7 +60,8 @@ export const nomeLista = l => [(l && l.evento) || 'Lista sem nome', l && l.sala]
 export const BASE_NOME = {
   gabinetes: 'gabinetes', cases: 'cases', colunas: 'colunas', linhas: 'linhas', largura_m: 'm de largura', altura_m: 'm de altura',
   m2: 'm²', circuitos: 'circuitos', portas: 'portas de dados', apoios: 'apoios de mão francesa', mf_192: 'peças de 1,92 (pelos apoios)',
-  mf_144: 'peças de 1,44 (pelos apoios)', mf_096: 'peças de 0,96 (pelos apoios)', tela: 'tela', lista: 'lista',
+  mf_144: 'peças de 1,44 (pelos apoios)', mf_096: 'peças de 0,96 (pelos apoios)', pesos: 'pesos (1 por metro, por fileira)',
+  mf_segunda_linha: 'fileiras com segunda linha', tela: 'tela', lista: 'lista',
   gabinetes_chao: 'gabinetes no chão', telas: 'telas', telas_chao: 'telas no chão'
 };
 export const ARRED_NOME = { cima: 'para cima', baixo: 'para baixo', proximo: 'para o mais próximo' };

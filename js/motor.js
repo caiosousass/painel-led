@@ -88,16 +88,77 @@ export function quantidadeDaRegra(regra, valorBase) {
  * Cada apoio empilha peças até cobrir a altura do painel: 3 m = 1,92 + 0,96; 3,5 m = 1,92 + 1,44;
  * 4,5 m = 1,92 + 1,44 + 0,96. É exatamente o que aparece nas listas conferidas.
  */
-export function pecasMaoFrancesa(meios) {
-  const m = Math.max(0, Math.round(meios));
-  const r = { p192: 0, p144: 0, p096: 0 };
-  if (!m) return r;
-  const q = Math.floor(m / 4), resto = m % 4;
-  if (resto === 0) r.p192 = q;
-  else if (resto === 1) { if (q >= 1) { r.p192 = q - 1; r.p144 = 1; r.p096 = 1; } else r.p096 = 1; }
-  else if (resto === 2) { r.p192 = q; r.p096 = 1; }
-  else { r.p192 = q; r.p144 = 1; }
-  return r;
+/* ============================================================
+ * Estrutura de apoio: mão francesa e pesos — a regra da equipe, a MESMA do Projetech Calculator
+ * (regraEstrutura / estruturaDaCena, v343), mais a segunda linha que a equipe põe em painel alto:
+ *  - a mão francesa é um quadro de tubo com 0,60 m de fundo, de pé atrás do painel. Peças de 1,92 m
+ *    (dois quadros de 0,96), 1,44 m e 0,96 m, empilhadas a partir de onde ela apoia, a maior embaixo,
+ *    até chegar o mais perto possível do topo do painel sem passar dele; dando empate, menos peças;
+ *  - fileiras: sempre na emenda das placas, nas duas pontas; da primeira emenda, de 1,5 em 1,5 m;
+ *  - pesos: em cada fileira, 1 a cada 1 m da altura que ela alcança (de onde apoia até o topo do
+ *    painel), arredondando normal (2,5 m → 3; 4,1 m → 4);
+ *  - palco: painel sobre o palco com a mão francesa no CHÃO (atrás do palco) → a altura do palco entra
+ *    na conta; com ela NO PALCO, o palco não conta, mas ele precisa de 0,80 m de fundo (senão vai no chão);
+ *  - segunda linha: a partir de 4,5 m de altura alcançada, a 1,92 da base é dobrada para trás (mais um
+ *    quadro de 1,92 por fileira, base com 1,20 m de fundo) — como no desenho do painel central 4 m sobre
+ *    palco 0,60 e dos laterais de 4,5 m.
+ * ============================================================ */
+export const MF = { modulos: [1.92, 1.44, 0.96], vao: 1.5, prof: 0.6, folgaPalco: 0.1, pesoACada: 1, segundaLinha: 4.5 };
+export const MF_PALCO_MIN = MF.prof + MF.folgaPalco + 0.1;   // 0,80 m de fundo para ela caber no palco
+
+// a pilha (até 8 peças) que chega mais perto do topo sem passar; null se não cabe nem a menor (painel < 0,96 m)
+export function pilhaMaoFrancesa(alto) {
+  let melhor = null;
+  const busca = (pilha, soma) => {
+    if (pilha.length && (!melhor || soma > melhor.soma + 1e-9 || (Math.abs(soma - melhor.soma) < 1e-9 && pilha.length < melhor.pilha.length)))
+      melhor = { pilha: pilha.slice(), soma };
+    if (pilha.length >= 8) return;
+    for (const h of MF.modulos) if ((!pilha.length || h <= pilha[pilha.length - 1]) && soma + h <= alto + 0.01) busca([...pilha, h], soma + h);
+  };
+  busca([], 0);
+  return melhor ? { pilha: melhor.pilha, topo: +melhor.soma.toFixed(3) } : null;
+}
+
+// onde vai cada fileira, em metros a partir da ponta esquerda do painel (sempre numa emenda de placas)
+export function fileirasMaoFrancesa(larguraM, placa) {
+  const p = placa > 0 ? placa : 0.5, ult = larguraM - p, xs = [];
+  if (!(larguraM > 0)) return xs;
+  if (larguraM < 2 * p - 1e-6) return [larguraM / 2];         // uma placa só de largura: no meio dela
+  for (let x0 = p; x0 <= ult + 1e-6; x0 += MF.vao) {
+    const x = Math.min(Math.round(x0 / p) * p, ult);
+    if (!xs.length || x > xs[xs.length - 1] + 1e-6) xs.push(+x.toFixed(3));
+  }
+  if (xs[xs.length - 1] < ult - 1e-6) xs.push(+ult.toFixed(3)); // a última emenda sempre leva uma
+  return xs;
+}
+
+/* A estrutura de uma tela no chão (ou sobre o palco). tela.palco = { sobre, altura_m, fundo_m, mf: 'chao'|'palco' }.
+ * Devolve null se a tela não leva mão francesa (aéreo, totem… ou painel mais baixo que 0,96 m). */
+export function estruturaTela(tela, painel, dims) {
+  if ((tela.montagem || 'chao') !== 'chao') return null;
+  const p = painel || {};
+  const gl = num(p.larg_m) || 0.5, ga = num(p.alt_m) || 0.5;
+  const g = dims || geometria(Object.assign({}, tela, { montagem: 'outro' }), p);
+  const wM = g.colunas * gl, hM = g.linhas * ga;
+  if (!(wM > 0 && hM > 0)) return null;
+  const pl = tela.palco || {};
+  const sobre = !!pl.sobre && num(pl.altura_m) > 0;
+  const altPalco = sobre ? num(pl.altura_m) : 0, fundo = sobre ? num(pl.fundo_m) : 0;
+  const querPalco = sobre && pl.mf === 'palco';
+  const raso = querPalco && fundo > 0 && fundo < MF_PALCO_MIN - 1e-9;   // não cabe no palco: vai no chão
+  const noPalco = querPalco && !raso;
+  const base = noPalco ? altPalco : 0;
+  const alto = +(altPalco + hM - base).toFixed(3);
+  const pilha = pilhaMaoFrancesa(alto);
+  if (!pilha) return null;
+  const xs = fileirasMaoFrancesa(wM, gl);
+  const segunda = alto >= MF.segundaLinha - 1e-9 && pilha.pilha[0] === 1.92;
+  const pesos = Math.max(1, Math.floor(alto / MF.pesoACada + 0.5 + 1e-6));
+  return {
+    fileiras: xs.length, posicoes: xs, pilha: pilha.pilha, topo: pilha.topo, alto, base, pesos,
+    segunda_linha: segunda, sobre, noPalco, raso, altura_palco: altPalco, fundo_palco: fundo,
+    largura_m: +wM.toFixed(3), altura_m: +hM.toFixed(3)
+  };
 }
 
 export const MODOS_TELA = ['medida', 'grade', 'm2', 'gabinetes'];
@@ -129,8 +190,10 @@ export function geometria(tela, painel) {
   const porCirc = num(p.por_circuito) || 12;
   const pxPorta = num(p.px_porta) || 650000;
   const chao = (tela.montagem || 'chao') === 'chao' && colunas > 0 && linhas > 0;
-  const apoios = chao ? Math.floor(colunas / 3) + 1 : 0;
-  const pecas = chao ? pecasMaoFrancesa(altura_m / 0.5) : { p192: 0, p144: 0, p096: 0 };
+  // mão francesa e pesos: a regra da equipe (a mesma do Calculator), com palco e segunda linha
+  const est = chao ? estruturaTela(tela, p, { colunas, linhas }) : null;
+  const apoios = est ? est.fileiras : 0;
+  const nPilha = h => (est ? est.pilha.filter(x => x === h).length : 0);
   return {
     tela: 1,
     gabinetes, colunas, linhas,
@@ -142,9 +205,12 @@ export function geometria(tela, painel) {
     portas: pixels ? arredonda(pixels / pxPorta, 'cima') : 0,
     gab_por_porta: pxPorGab ? Math.floor(pxPorta / pxPorGab) : 0,
     apoios,
-    mf_192: apoios * pecas.p192,
-    mf_144: apoios * pecas.p144,
-    mf_096: apoios * pecas.p096,
+    mf_192: apoios * (nPilha(1.92) + (est && est.segunda_linha ? 1 : 0)),
+    mf_144: apoios * nPilha(1.44),
+    mf_096: apoios * nPilha(0.96),
+    pesos: est ? apoios * est.pesos : 0,
+    mf_alto: est ? est.alto : 0,
+    mf_segunda_linha: est && est.segunda_linha ? apoios : 0,
     peso_painel_kg: +(gabinetes * num(p.kg)).toFixed(1),
     potencia_max_w: gabinetes * num(p.w_max),
     potencia_med_w: gabinetes * num(p.w_med),
@@ -295,7 +361,7 @@ function basesDoProjeto(tela, painel, g) {
 
 // Bases que a tela de regras oferece (a tela é quem dá nome humano a elas).
 export const BASES_TELA = ['gabinetes', 'cases', 'colunas', 'linhas', 'largura_m', 'altura_m', 'm2', 'circuitos', 'portas',
-  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'apoios', 'mf_192', 'mf_144', 'mf_096', 'tela'];
+  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'apoios', 'mf_192', 'mf_144', 'mf_096', 'pesos', 'mf_segunda_linha', 'tela'];
 export const BASES_LISTA = ['lista', 'gabinetes', 'gabinetes_chao', 'cases', 'circuitos', 'telas', 'telas_chao', 'm2'];
 
 /* ============================================================
