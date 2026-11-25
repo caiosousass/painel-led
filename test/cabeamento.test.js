@@ -68,3 +68,34 @@ test('larguraTexto mede como a Helvetica do jsPDF', () => {
   assert.ok(Math.abs(Cab.larguraTexto('Projeto: ', 10, false) - 13.14) < 0.05);
   assert.ok(Cab.larguraTexto('ABC', 10, true) > Cab.larguraTexto('ABC', 10, false));
 });
+
+test('portas desenhadas à mão (editor): viram as portas e os circuitos; tela que mudou de tamanho volta ao automático', () => {
+  const cam = (c0, n) => Array.from({ length: n }, (_, k) => [c0 + Math.floor(k / 5), k % 5]);
+  const pl = Cab.planoTela(tela(9, 5, { portas_manual: [cam(0, 15), cam(3, 30)] }));
+  assert.equal(pl.dados.modo, 'manual');
+  assert.deepEqual(pl.dados.portas.map(p => p.gabinetes), [15, 30]);
+  assert.equal(pl.dados.sem_porta, 0);
+  assert.equal(pl.dados.portas_excedem, 1);                       // 30 × 28.224 px passa de 650 mil
+  assert.deepEqual(pl.energia.circuitos.map(c => c.gabinetes), [15, 15, 15]);   // 30 gab de V10 (4 kW) = 2 circuitos
+  // "Limpar": desenho à mão sem porta nenhuma
+  const vazio = Cab.planoTela(tela(9, 5, { portas_manual: [] }));
+  assert.equal(vazio.dados.portas.length, 0);
+  assert.equal(vazio.dados.sem_porta, 45);
+  assert.equal(vazio.energia.reguas.length, 0);
+  // a tela encolheu: o desenho não serve mais
+  const fora = Cab.planoTela(tela(4, 5, { portas_manual: [cam(0, 15), cam(3, 30)] }));
+  assert.equal(fora.dados.manual, false);
+  assert.equal(fora.dados.manual_invalido, true);
+  // gabinete repetido também não vale
+  assert.equal(Cab.portasManuais([[[0, 0], [0, 1]], [[0, 1]]], 9, 5), null);
+});
+
+test('posição das telas na sala: a que o editor gravou; sem ela, depois da anterior', () => {
+  const telas = [
+    { id: 'a', nome: 'A', painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 2, pos: { x: 10 } },
+    { id: 'b', nome: 'B', painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 2 }];
+  const ps = M.planoSala(telas, catalogoInicial(), {});
+  const pos = Cab.posicoesDaSala(ps);
+  assert.equal(pos.get(ps.telas[0]), 10);
+  assert.ok(pos.get(ps.telas[1]) >= 14);   // depois da A, com vão
+});

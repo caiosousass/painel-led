@@ -451,3 +451,23 @@ input[type=search]{background:var(--campo);border:1px solid var(--line);border-r
 .folha-tab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 .proj-linha{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--bg2,rgba(127,127,127,.08));font-size:13px}
 .proj-linha svg{width:18px;height:18px;flex:none}
+
+/* Montagem da sala (editor tipo SmartLCT) */
+.mt-quadro{background:#f8fafc;border-radius:10px;overflow:auto;max-height:70vh;border:1px solid var(--line)}
+.mt-svg{width:100%;height:auto;min-height:220px;display:block;touch-action:pan-x pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
+.mt-svg.paineis{touch-action:pan-y}
+.mt-svg.pintando{touch-action:none;cursor:crosshair}
+.mt-vazio{padding:40px 16px;text-align:center;color:#64748b;font-size:14px}
+.mt-lado{margin-top:12px}
+.mt-sinal{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:18px}
+@media (max-width:700px){.mt-sinal{grid-template-columns:1fr}}
+.mt-pads{display:grid;grid-template-columns:repeat(4,48px);gap:6px}
+.mt-pad{width:48px;height:48px;padding:5px;border-radius:10px;border:1px solid var(--line);background:var(--card2,transparent);color:var(--txt);cursor:pointer}
+.mt-pad svg{width:100%;height:100%;display:block}
+.mt-pad.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset;color:var(--acc)}
+.mt-mao.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.mt-portas{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.mt-portas td{padding:3px 6px;border-bottom:1px solid var(--line)}
+.mt-portas td.n{text-align:right;white-space:nowrap}
+.mt-portas tr.passa td{color:var(--danger,#dc2626);font-weight:700}
+.mt-cor{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}

@@ -69,6 +69,23 @@ Antes: olhar a OS e a implantação → fazer a lista → fazer o projeto de AC 
 - **Nova lista**: o projeto da sala já existe — botão **Projeto da sala** na lista.
 - **Importar OS**: cria a lista e o projeto de uma vez e abre o projeto (OS com várias salas: abre o evento).
 
+## Montagem da sala (o editor, no jeito do SmartLCT da NovaStar)
+
+No **Projeto da sala**, em cima, a sala vista de frente, em escala (zoom − / +):
+
+1. **Painéis** — arraste as telas para o lado para posicionar (fica gravado em metros da esquerda); a ordem da
+   esquerda para a direita vale para o desenho do projeto e para a divisão dos racks. Tocar numa tela mostra nome,
+   largura, altura e posição; *+ Tela*, *Duplicar* e *Tirar da sala*.
+2. **Sinal** — escolha o padrão do cabo de cada tela pelos desenhos (o canto onde começa e o sentido, como a NovaStar
+   mostra), serpentina, "linhas inteiras" ou "enche a porta" e o limite de pixels; ou **desenhe as portas à mão**:
+   toque num gabinete e passe pelos outros na ordem do cabo (tocar no meio de uma porta continua dali; num gabinete
+   livre, abre uma porta nova; *Desfazer*, *Limpar*, *Voltar ao automático*). A tabela mostra os pixels de cada porta
+   e avisa quando passa do limite ou quando sobra gabinete sem porta. O desenho à mão começa do que o sistema sugeriu.
+
+Cada mudança grava a sala: o projeto (PDF) e a lista (cabos de 20 m, powercon 10 m, réguas, controladoras)
+acompanham. Próximas etapas: **Energia** (em qual régua entra cada circuito, em qual rack liga cada régua) e
+**Processamento** (controladoras → processadora).
+
 ## Projeto técnico (AC e sinal) — no modelo da Projetech (Syngenta, OS 32465)
 
 O projeto técnico de cabeamento sai **daqui** (Projeto da sala → *Exportar PDF*; no evento, *Projeto do evento*).
@@ -168,7 +185,8 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/projeto.js` | monta as folhas da sala com o que a lista sabe e exporta o PDF |
 | `js/ui/receber.js` | recebe a sala do Calculator ("Gerar lista no Painel de LED") |
 | `js/ui/projsala.js` | a tela Projeto da sala (começar pelo projeto) |
+| `js/ui/montagem.js` | o editor da sala: Painéis e Sinal (portas à mão) |
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 67 testes (cabeamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 69 testes (cabeamento, portas à mão e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

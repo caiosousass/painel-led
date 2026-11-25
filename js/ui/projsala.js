@@ -8,6 +8,7 @@ import { novaTela } from './listas.js';
 import { abrir3D } from './tres.js';
 import { folhasDaLista, svgDaFolha, exportarProjeto, NOME_FOLHA, FORMATOS, formatoDaLista } from './projeto.js';
 import { planoDeRecalculo, recalcularLista, editavel } from './lista.js';
+import { htmlMontagem, ligarMontagem } from './montagem.js';
 
 const folhaVista = new Map(); // lista → folha mostrada
 
@@ -109,7 +110,9 @@ export function render(ctx, [id]) {
       <label class="campo"><span>OS</span><input data-lc="os" data-k="pj-os" value="${B.esc(lista.os || '')}"></label>
     </div><p class="dica">Data, cliente e local ficam na lista desta sala.</p></details>` : ''}
 
-  <div class="card"><h2>Folhas <span class="conta">${folhas.length}</span>
+  ${htmlMontagem(ctx, lista, ps, pode)}
+
+  <div class="card"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
       <span class="dir">${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
     ${folhas.length ? `<div class="proj-prev pj-folha">${svgDaFolha(ctx, lista, folhas[fi])}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
     <div class="pj-resumo">
@@ -162,7 +165,8 @@ export function ligar(el, ctx, [id]) {
   // a lista acompanha o projeto: sem nada separado, recalcula sozinha (regras novas, catálogo)
   const plano = planoDeRecalculo(ctx, lista);
   if (pode && !plano.temSep && plano.diff.length) { recalcularLista(ctx, lista).then(() => ctx.atualizar()); return; }
-  if (!pode) { el.querySelectorAll('input,select').forEach(i => { i.disabled = true; }); return; }
+  const psAgora = () => M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
+  if (!pode) { ligarMontagem(el, ctx, lista, psAgora(), null, false); el.querySelectorAll('input,select').forEach(i => { i.disabled = true; }); return; }
 
   const salvar = async (campos, { recalc = true } = {}) => {
     Object.assign(lista, campos);
@@ -174,6 +178,9 @@ export function ligar(el, ctx, [id]) {
     ctx.atualizar();
   };
   el.querySelectorAll('[data-lc]').forEach(inp => inp.addEventListener('change', () => salvar({ [inp.dataset.lc]: inp.value.trim() }, { recalc: false })));
+
+  // a montagem da sala (Painéis e Sinal): o editor grava pela mesma porta
+  ligarMontagem(el, ctx, lista, psAgora(), salvar, true);
 
   // sala
   el.querySelectorAll('[data-sc]').forEach(inp => inp.addEventListener('change', () => {

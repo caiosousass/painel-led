@@ -108,6 +108,27 @@ export function escolherSentido(cfgSentido, C, L, cabe) {
   return (ops.length ? ops : [v, h]).sort((a, b) => a.portas - b.portas || (b.igual - a.igual) || (a.sentido === 'vertical' ? -1 : 1))[0];
 }
 
+/* As portas desenhadas à mão no editor (cfg.portas_manual): [[ [coluna, linha], … ], …] na ordem do cabo.
+ * Lista vazia = desenho à mão sem nenhuma porta ainda ("Limpar"); null/ausente = automático.
+ * Fora da tela ou gabinete repetido = o desenho não serve mais (a tela mudou de tamanho) → null. */
+export function portasManuais(m, C, L) {
+  if (!Array.isArray(m)) return null;
+  const vistos = new Set(), out = [];
+  for (const cam of m) {
+    if (!Array.isArray(cam)) return null;
+    const p = [];
+    for (const q of cam) {
+      const c = Math.round(num(q && q[0])), r = Math.round(num(q && q[1]));
+      if (!Array.isArray(q) || !(c >= 0 && c < C && r >= 0 && r < L)) return null;
+      const k = c + ',' + r;
+      if (vistos.has(k)) return null;
+      vistos.add(k); p.push([c, r]);
+    }
+    if (p.length) out.push(p);
+  }
+  return out;
+}
+
 /* O plano de UMA tela: t = { colunas, linhas, painel: { px_l, px_a, w_max, px_porta, por_circuito }, cfg } */
 export function planoTela(t) {
   const C = Math.round(num(t.colunas)), L = Math.round(num(t.linhas));
@@ -135,7 +156,9 @@ export function planoTela(t) {
   }
 
   const portas = [], blocosLinhas = [];
-  for (const fx of faixas) {
+  const manual = portasManuais(cfg.portas_manual, C, L);
+  if (manual) manual.forEach(cam => portas.push({ n: portas.length + 1, gabinetes: cam.length, pixels: cam.length * pxGab, caminho: cam, manual: true }));
+  else for (const fx of faixas) {
     const pc = percurso(C, L, sentido, cfg.inicio, serp, fx);
     if (cheia) {
       const tudo = [];
@@ -164,6 +187,14 @@ export function planoTela(t) {
   const limGab = num(p.por_circuito) > 0 ? num(p.por_circuito) : Infinity;
   const maxGab = Math.max(1, Math.min(limGab, wGab ? Math.floor(limW / wGab) : Infinity));
   const circuitos = [];
+  if (manual) for (const pt of portas) {
+    let a = 0;
+    for (const q of dividir(pt.caminho.length, Math.ceil(pt.caminho.length / maxGab))) {
+      const cam = pt.caminho.slice(a, a + q);
+      circuitos.push({ n: circuitos.length + 1, porta: pt.n, gabinetes: cam.length, w: cam.length * wGab, caminho: cam });
+      a += q;
+    }
+  }
   for (const b of blocosLinhas) {
     const { pc } = b;
     const linhaDe = j => pc.celulas(b.li0 + j, b.global ? b.li0 + j : j);
@@ -193,10 +224,10 @@ export function planoTela(t) {
   const limR = Math.max(0.1, num(cfg.kw_regua) || 7.5) * 1000;
   const maiorCirc = circuitos.reduce((m, c) => Math.max(m, c.w), 0);
   const porRegua = maiorCirc ? Math.max(1, Math.floor(limR / maiorCirc)) : circuitos.length;
-  const nReguas = Math.ceil(circuitos.length / porRegua);
+  const nReguas = circuitos.length ? Math.ceil(circuitos.length / porRegua) : 0;
   const reguas = [];
   let c0 = 0;
-  for (const qtd of dividir(circuitos.length, nReguas)) {
+  if (nReguas) for (const qtd of dividir(circuitos.length, nReguas)) {
     const cs = circuitos.slice(c0, c0 + qtd), cels = cs.flatMap(c => c.caminho);
     const xs = cels.map(([c]) => c), ys = cels.map(([, r]) => r);
     cs.forEach(c => { c.regua = reguas.length + 1; });
@@ -219,15 +250,19 @@ export function planoTela(t) {
     r0 += qtd;
   }
 
-  const maiorBloco = cheia ? 0 : Math.max(...op.blocos);
+  const maiorBloco = cheia || manual ? 0 : Math.max(...op.blocos);
+  const usados = portas.reduce((a, pt) => a + pt.caminho.length, 0);
   return {
     colunas: C, linhas: L, gabinetes: C * L,
     largura_m: +(C * (num(p.larg_m) || 0.5)).toFixed(3), altura_m: +(L * (num(p.alt_m) || 0.5)).toFixed(3),
     px_l: num(p.px_l), px_a: num(p.px_a), cfg,
     dados: {
-      modo: cheia ? 'cheia' : 'colunas', sentido, faixas: faixas.length, coluna_excede: !!op.excede && !cheia,
+      modo: manual ? 'manual' : cheia ? 'cheia' : 'colunas', sentido: manual ? 'manual' : sentido, faixas: manual ? 0 : faixas.length,
+      coluna_excede: !manual && !!op.excede && !cheia, manual: !!manual,
+      manual_invalido: !manual && Array.isArray(cfg.portas_manual),
+      sem_porta: C * L - usados, portas_excedem: portas.filter(pt => pt.pixels > pxPorta).length,
       linhas_por_porta: maiorBloco, cols_por_porta: cheia ? 0 : sentido === 'vertical' ? maiorBloco : C,
-      gab_por_porta: cheia ? cabe : maiorBloco * (faixas.length > 1 ? Math.max(...op.faixas) : tamLinha),
+      gab_por_porta: manual ? Math.max(0, ...portas.map(pt => pt.gabinetes)) : cheia ? cabe : maiorBloco * (faixas.length > 1 ? Math.max(...op.faixas) : tamLinha),
       px_porta: pxPorta, cabe, portas, cabos: portas.length * (cfg.backup ? 2 : 1)
     },
     energia: { w_gab: wGab, w_coluna: L * wGab, limite_w: limR, limite_circuito_w: limW, max_gab_circuito: maxGab, circuitos, reguas, racks, w_total: C * L * wGab }
@@ -505,6 +540,7 @@ function salaTecnica(P, ps, area, modo, k) {
     const yC = yBase + hBaixo * 0.3;
     const ctrls = geo.map(g => {
       const xs = saidas(g, g.pl.dados.portas.map(p => p.caminho));
+      if (!xs.length) return { g, x: g.xm, xb: g.xm };
       xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBusS, stroke: '#111827', sw: 0.25 * k }));
       const a = Math.min(...xs), b = Math.max(...xs);
       if (xs.length > 1) P.push({ t: 'line', x1: a, y1: yBusS, x2: b, y2: yBusS, stroke: '#111827', sw: 0.25 * k });
