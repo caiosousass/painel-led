@@ -1,41 +1,31 @@
 /* Projetech · Painel de LED — projeto técnico da sala.
  *
- * As folhas são as do Projetech Calculator (o mesmo js/cabeamento.js dos dois apps): Pixel map,
- * Cabeamento de sinal e Cabeamento de AC, com a moldura, as cotas e o carimbo de lá. Aqui só se monta
- * o que a lista sabe (evento, sala, OS, datas) e se exporta o PDF (jsPDF).
+ * As folhas são as do modelo da Projetech (projeto da Syngenta, OS 32465), desenhadas por js/cabeamento.js:
+ * Cabeamento de AC (circuitos, réguas e o rack de energia), Cabeamento de Sinal (portas, controladoras e a
+ * processadora) — ou uma folha só, "AC e Sinal", na sala pequena. Aqui só se monta o que a lista sabe
+ * (evento, sala, OS, local, responsável) e se exporta o PDF (jsPDF).
  */
 import * as Cab from '../cabeamento.js';
 
-// cores das portas no 3D (textura do painel)
-export const CORES = ['#5fd8ca', '#e290ea', '#7fd17f', '#8b8ff2', '#f2e35c', '#f3a862', '#f29191', '#90baf2', '#c9baf6', '#f8c9d7', '#dceef8', '#a6d873'];
-export const NOME_FOLHA = { teste: 'Pixel map', sinal: 'Sinal', ac: 'AC' };
-export const FORMATOS = Cab.FORMATOS;
+// cores das portas (as do projeto) — também no 3D
+export const CORES = Cab.CORES_PORTA;
+export const NOME_FOLHA = { ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal' };
 const RAZAO_LOGO = 2946 / 842;          // logo.png
-const IMAGENS_SVG = { logo: 'logo.png', 'logo-branco': 'logo-branco.png' };
+const IMAGENS_SVG = { logo: 'logo.png' };
 
 /* o que vai no carimbo: o que a lista sabe da sala e do evento */
 function metaDaLista(ctx, lista, hoje) {
-  const { M } = ctx;
-  const ps = M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
-  const desenhaveis = ps.telas.filter(it => it.pl);
   return {
-    ps,
-    meta: {
-      projeto: lista.evento || '', local: lista.local || '',
-      sala: lista.sala || (desenhaveis.length === 1 ? desenhaveis[0].nome : '') || '',
-      responsavel: lista.responsavel_projeto || ctx.quem(),
-      montagem: lista.ida ? M.D.mais(lista.ida, 1) : '', emissao: hoje || '',
-      cliente: lista.cliente || '', agencia: '', os: lista.os || ''
-    }
+    projeto: lista.evento || '', local: lista.local || '', sala: lista.sala || '',
+    responsavel: lista.responsavel_projeto || ctx.quem(), emissao: hoje || '',
+    cliente: lista.cliente || '', os: lista.os || ''
   };
 }
 
-export function formatoDaLista(lista) { const f = (lista.projeto || {}).folha; return Cab.FORMATOS[f] ? f : 'a3'; }
-
-/* as folhas de uma sala: [{ tipo, prims, formato, escala }] */
+/* as folhas de uma sala: [{ tipo: 'ac'|'sinal'|'ambos', prims, formato }] */
 export function folhasDaLista(ctx, lista, { hoje, inicio, total } = {}) {
-  const { ps, meta } = metaDaLista(ctx, lista, hoje || ctx.hoje());
-  return Cab.folhasDoProjeto(ps, meta, { formato: formatoDaLista(lista), inicio, total, razaoLogo: RAZAO_LOGO });
+  const ps = ctx.M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
+  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO });
 }
 
 export function svgDaFolha(ctx, lista, folha) { return Cab.svg(folha, IMAGENS_SVG); }
@@ -69,7 +59,6 @@ async function exportarProjetoDe(ctx, listas, partesNome) {
   if (!window.jspdf) await carregarScript('vendor/jspdf.umd.min.js');
   const imagens = {};
   try { imagens.logo = await carregarImagem('logo.png', 1000); } catch (e) { /* sai sem logo */ }
-  try { imagens['logo-branco'] = await carregarImagem('logo-branco.png', 900); } catch (e) { /* sai sem logo */ }
   const hoje = ctx.hoje();
   const contas = listas.map(l => folhasDaLista(ctx, l, { hoje }).length);
   const total = contas.reduce((a, b) => a + b, 0);
@@ -78,10 +67,10 @@ async function exportarProjetoDe(ctx, listas, partesNome) {
   let n = 0;
   listas.forEach((l, i) => { folhas.push(...folhasDaLista(ctx, l, { hoje, inicio: n, total })); n += contas[i]; });
   const { jsPDF } = window.jspdf;
-  const F0 = folhas[0].formato;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [F0.w, F0.h], compress: true });
+  const F = Cab.FOLHA_TECNICA;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [F.w, F.h], compress: true });
   folhas.forEach((f, i) => {
-    if (i) doc.addPage([f.formato.w, f.formato.h], 'landscape');
+    if (i) doc.addPage([F.w, F.h], 'landscape');
     Cab.pdf(doc, f, imagens);
   });
   const nome = partesNome.filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]/g, '');

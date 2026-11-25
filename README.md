@@ -69,25 +69,26 @@ Antes: olhar a OS e a implantação → fazer a lista → fazer o projeto de AC 
 - **Nova lista**: o projeto da sala já existe — botão **Projeto da sala** na lista.
 - **Importar OS**: cria a lista e o projeto de uma vez e abre o projeto (OS com várias salas: abre o evento).
 
-## Projeto técnico — o mesmo do Projetech Calculator
+## Projeto técnico (AC e sinal) — no modelo da Projetech (Syngenta, OS 32465)
 
-As folhas são as do Calculator, desenhadas por **`js/cabeamento.js`, o mesmo arquivo nos dois apps**
-(`projetech/cabeamento.js`; um teste confere que são iguais). Folha A3 (ou 16:9, A4), moldura, cotas em metros e
-pixels, o painel em degradê com a grade e o carimbo Projetech (cases, gabinetes, peso, consumo, escala… +
-projeto, local, sala, responsável, datas, cliente, OS e folha).
+O projeto técnico de cabeamento sai **daqui** (Projeto da sala → *Exportar PDF*; no evento, *Projeto do evento*).
+A sala inteira numa folha 16:9, com o nome da sala, as telas e as medidas no alto e o carimbo da Projetech (nome do
+projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, cliente e número da folha).
 
-1. **Pixel map** — a imagem de teste (números das colunas, X, círculo e logo).
-2. **Cabeamento de sinal** — a seta do cabo na passagem entre os gabinetes e cada porta num círculo numerado;
-   embaixo, as portas de cada tela até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de pixels; ou
-   Taurus TB60 / TB1) e as controladoras até a **processadora** da sala.
-3. **Cabeamento de AC** — os circuitos de powercon em amarelo; cada circuito desce até a **régua** Steck/Powercon
-   (triângulo azul) e as réguas da **sala inteira** são repartidas nos **racks**.
+- **Cabeamento de AC** — cada circuito de powercon com a sua cor e o caminho do cabo (início verde, fim
+  vermelho); os circuitos descem até a **régua** Steck/Powercon (triângulo azul) e as réguas até o **rack de
+  energia** da sala (as réguas da sala inteira repartidas nos racks).
+- **Cabeamento de Sinal** — cada porta com a sua cor e a etiqueta Novastar (C · P · RV · A · WH) em cada
+  gabinete; as portas de cada tela descem até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de
+  pixels; ou Taurus TB60 / TB1) e as controladoras até a **processadora** da sala (o nome vem do Projeto da sala).
+- Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer. Dá para pedir sempre separadas ou
+  sempre juntas em *Energia e processamento da sala*.
 
-No Calculator, o projeto técnico ganha as folhas 2 e 3 no fim (chip *Folhas de cabeamento de sinal e de AC*).
+O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.
 
 **As contas**: cada porta pega **linhas inteiras** (colunas na vertical, fileiras na horizontal) até o limite de
-pixels — e de gabinetes, se houver —, **repartidas por igual** (9 colunas com até 4 por porta → 3, 3, 3; o pixel
-map do Calculator agora reparte igual também). Linha que não cabe numa porta: a tela vira faixas iguais (fileira
+pixels — e de gabinetes, se houver —, **repartidas por igual** (9 colunas com até 4 por porta → 3, 3, 3 — o pixel
+map do Calculator reparte igual). Linha que não cabe numa porta: a tela vira faixas iguais (fileira
 de 40 com limite 23 → 2 de 20). *Encher a porta* (o "Livre" do Calculator) = uma corrente só. O canto, o sentido e
 a serpentina vêm do Calculator; aqui, o automático escolhe o sentido que usa menos portas (empate: o que reparte
 por igual). Cada bloco de porta é um **circuito** (dividido se passar de 3,5 kW ou do máximo de gabinetes do
@@ -163,11 +164,11 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/historico.js` | as listas conferidas, anônimas (só itens) — base do "costuma ir" |
 | `js/dados.js` | IndexedDB no aparelho + fila de envio + sincronização em tempo real com o Supabase |
 | `js/os.js` | lê o .xlsx da OS no navegador e tira cabeçalho, salas e painéis com medida |
-| `js/cabeamento.js` | **compartilhado com o Calculator**: contas do cabeamento e as folhas do projeto técnico (SVG e PDF) |
+| `js/cabeamento.js` | contas do cabeamento (as mesmas do pixel map do Calculator) e as folhas do projeto técnico (SVG e PDF) |
 | `js/ui/projeto.js` | monta as folhas da sala com o que a lista sabe e exporta o PDF |
 | `js/ui/receber.js` | recebe a sala do Calculator ("Gerar lista no Painel de LED") |
 | `js/ui/projsala.js` | a tela Projeto da sala (começar pelo projeto) |
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 68 testes (cabeamento igual ao do Calculator, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 67 testes (cabeamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

@@ -1,19 +1,12 @@
-// Testes do cabeamento.js — o arquivo compartilhado com o Projetech Calculator
+// Testes do cabeamento.js — contas do cabeamento (as mesmas do pixel map do Calculator) e o projeto técnico
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
 import * as Cab from '../js/cabeamento.js';
 import * as M from '../js/motor.js';
 import { catalogoInicial } from '../js/seed.js';
 
 const V10 = catalogoInicial().find(c => c.id === 'led-v10').painel;
 const tela = (colunas, linhas, cfg, painel = V10) => ({ colunas, linhas, painel, cfg });
-
-test('é o mesmo arquivo do Calculator (quando a pasta dele está ao lado)', { skip: !existsSync(new URL('../../projetech/cabeamento.js', import.meta.url)) }, () => {
-  const ler = u => readFileSync(new URL(u, import.meta.url), 'utf8').replace(/\r\n/g, '\n');   // o git pode trocar o fim de linha
-  const aqui = ler('../js/cabeamento.js'), la = ler('../../projetech/cabeamento.js');
-  assert.equal(la, aqui, 'copie js/cabeamento.js para projetech/cabeamento.js');
-});
 
 test('padrões do Calculator: canto, sentido, sem serpentina, limite de gabinetes por porta', () => {
   // começa em cima à direita, vertical: a 1ª porta desce a última coluna e sobe a penúltima
@@ -44,22 +37,29 @@ test('"Livre" do Calculator (enche a porta) = uma corrente só, cortada a cada N
   assert.deepEqual(pl.dados.portas[1].caminho[0], [4, 1]);              // continua no meio da 5ª coluna (que sobe)
 });
 
-test('folhas no estilo do Calculator: Pixel map, Sinal e AC, com o carimbo e a escala', () => {
-  const ps = M.planoSala([{ id: 'h', nome: 'Painel', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3.5, montagem: 'chao' }], catalogoInicial(), {});
-  const meta = { projeto: '', local: 'Royal Palm Plaza', sala: 'Plenária', responsavel: 'Caio', montagem: '2026-05-12', emissao: '2026-11-25', cliente: 'Syngenta', agencia: '', os: '32465' };
-  const fs = Cab.folhasDoProjeto(ps, meta, { formato: 'a3' });
-  assert.deepEqual(fs.map(f => f.tipo), ['teste', 'sinal', 'ac']);
-  assert.equal(Math.round(1000 / fs[0].escala), 16);      // 6 × 3,5 m no A3 = 1:16, como no Calculator
+test('projeto técnico no modelo da Syngenta: AC com rack, Sinal com controladoras e processadora, carimbo', () => {
+  const telas = [
+    { id: 'le', nome: 'Lateral esq.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 },
+    { id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 18, altura_m: 3.5 },
+    { id: 'ld', nome: 'Lateral dir.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 }];
+  const ps = M.planoSala(telas, catalogoInicial(), { processadora: 'VX1000' });
+  const meta = { projeto: 'Syngenta - Red Coop', local: 'Royal Palm Plaza', sala: 'Plenária', responsavel: 'Caio de Sousa Santos', emissao: '2026-05-11', cliente: 'Syngenta', os: '32465' };
+  const fs = Cab.folhasTecnicas(ps, meta, {});
+  assert.deepEqual(fs.map(f => f.tipo), ['ac', 'sinal']);
   const textos = f => f.prims.filter(p => p.t === 'text').map(p => p.txt);
-  assert.ok(textos(fs[0]).includes('6 m — 2.016 px'));
-  assert.ok(textos(fs[0]).includes('Painel de LED P2.9'));  // projeto em branco: o nome do Calculator
-  assert.ok(textos(fs[1]).includes('2/3'));
-  assert.ok(textos(fs[2]).some(t => /^Rack 1 · 9 saídas/.test(t)));
-  assert.match(Cab.svg(fs[1]), /^<svg [^>]*viewBox="0 0 420 297"/);
-  // 16:9 e numeração corrida (o Calculator põe as folhas de sinal e AC depois das dele)
-  const ex = Cab.folhasDoProjeto(ps, meta, { formato: '169', paginas: ['sinal', 'ac'], inicio: 3, total: 5 });
-  assert.equal(ex[0].formato.w, 528);
-  assert.ok(textos(ex[1]).includes('5/5'));
+  assert.ok(textos(fs[0]).includes('Plenária'));
+  assert.ok(textos(fs[0]).includes('2 Painéis de Led (Lateral esq. e dir.) – 4,5 x 2,5 m + Painel de Led (Central) – 18 x 3,5 m'));
+  assert.equal(textos(fs[0]).filter(t => /^Rack [12] · 9 saídas · 4 réguas$/.test(t)).length, 2);   // 2 racks de 4 réguas
+  assert.ok(textos(fs[0]).includes('Cabeamento de AC'));
+  assert.ok(textos(fs[1]).includes('VX1000'));                                           // a processadora
+  assert.ok(textos(fs[1]).includes('Cabeamento de Sinal'));
+  assert.ok(textos(fs[1]).includes('11/05/2026'));                                       // data do carimbo
+  assert.ok(textos(fs[1]).includes('02'));                                               // número da folha
+  assert.match(Cab.svg(fs[1]), /^<svg [^>]*viewBox="0 0 406.4 228.6"/);
+  // sala pequena (Foyer 4 × 3 m, 1 régua): uma folha só, "AC e Sinal"; dá para pedir separadas
+  const foyer = M.planoSala([{ id: 'f', nome: 'Foyer', painel: 'led-v10', modo: 'medida', largura_m: 4, altura_m: 3 }], catalogoInicial(), {});
+  assert.deepEqual(Cab.folhasTecnicas(foyer, { sala: 'Foyer' }).map(f => f.tipo), ['ambos']);
+  assert.deepEqual(Cab.folhasTecnicas(foyer, { sala: 'Foyer' }, { folhas: 'separadas', inicio: 3 }).map(f => f.tipo), ['ac', 'sinal']);
 });
 
 test('larguraTexto mede como a Helvetica do jsPDF', () => {

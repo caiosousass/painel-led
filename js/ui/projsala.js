@@ -6,7 +6,7 @@
  * desenho. Projeto e lista são o mesmo registro (a lista e as telas dela). */
 import { novaTela } from './listas.js';
 import { abrir3D } from './tres.js';
-import { folhasDaLista, svgDaFolha, exportarProjeto, NOME_FOLHA, FORMATOS, formatoDaLista } from './projeto.js';
+import { folhasDaLista, svgDaFolha, exportarProjeto, NOME_FOLHA } from './projeto.js';
 import { planoDeRecalculo, recalcularLista, editavel } from './lista.js';
 
 const folhaVista = new Map(); // lista → folha mostrada
@@ -132,9 +132,9 @@ export function render(ctx, [id]) {
       <label class="campo"><span>Limite por régua (kW)</span><input inputmode="decimal" data-todas="kw_regua" data-k="pj-kr" value="${v(cfg0.kw_regua)}" ${pode ? '' : 'disabled'}></label>
       <label class="campo"><span>Limite por circuito (kW)</span><input inputmode="decimal" data-todas="kw_circuito" data-k="pj-kc" value="${v(cfg0.kw_circuito)}" ${pode ? '' : 'disabled'}></label>
       <label class="campo"><span>Processadora</span><input data-sc="processadora" data-k="pj-proc" value="${B.esc(sc.processadora || '')}" placeholder="Ex.: VX1000 (aparece na folha)" ${pode ? '' : 'disabled'}></label>
-      <label class="campo"><span>Folha</span>${sel('folha', Object.entries(FORMATOS).map(([k, F]) => [k, F.nome]), formatoDaLista(lista))}</label>
+      <label class="campo"><span>Folhas do PDF</span>${sel('folhas', [['auto', 'Automático'], ['separadas', 'AC e Sinal separadas'], ['juntas', 'Uma folha só (AC e Sinal)']], sc.folhas)}</label>
     </div>
-    <p class="dica">Cada bloco de porta é um circuito de powercon (dividido se passar do limite por circuito) e desce até uma régua; a régua junta circuitos até o limite dela; as réguas da sala inteira são repartidas nos racks. As folhas são as do Projetech Calculator: Pixel map, Cabeamento de sinal e Cabeamento de AC (A3 para imprimir, 16:9 para tela).</p>
+    <p class="dica">Cada bloco de porta é um circuito de powercon (dividido se passar do limite por circuito) e desce até uma régua; a régua junta circuitos até o limite dela; as réguas da sala inteira são repartidas nos racks. O PDF segue o modelo do projeto da Syngenta: folha de AC (réguas e rack de energia) e folha de Sinal (controladoras e processadora); no automático, sala com 1 tela e 1 régua sai numa folha só.</p>
   </details>
 
   <div class="card"><h2>A lista desta sala <span class="conta">${ativas.length}</span><span class="dir"><button class="btn sm ir-lista">Abrir a lista ${B.ico('chev')}</button></span></h2>
@@ -179,7 +179,7 @@ export function ligar(el, ctx, [id]) {
     const campo = inp.dataset.sc;
     let val = inp.value;
     if (campo === 'reguas_rack') { val = B.lerNum(val); if (!(val >= 1)) { inp.classList.add('erro'); return; } }
-    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: campo !== 'processadora' && campo !== 'folha' });
+    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: campo !== 'processadora' && campo !== 'folhas' });
   }));
   el.querySelectorAll('[data-todas]').forEach(inp => inp.addEventListener('change', () => {
     const val = B.lerNum(inp.value);
