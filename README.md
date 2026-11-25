@@ -82,9 +82,15 @@ No **Projeto da sala**, em cima, a sala vista de frente, em escala (zoom − / +
    livre, abre uma porta nova; *Desfazer*, *Limpar*, *Voltar ao automático*). A tabela mostra os pixels de cada porta
    e avisa quando passa do limite ou quando sobra gabinete sem porta. O desenho à mão começa do que o sistema sugeriu.
 
-Cada mudança grava a sala: o projeto (PDF) e a lista (cabos de 20 m, powercon 10 m, réguas, controladoras)
-acompanham. Próximas etapas: **Energia** (em qual régua entra cada circuito, em qual rack liga cada régua) e
-**Processamento** (controladoras → processadora).
+3. **Energia** — os circuitos de powercon (cores e números amarelos), as **réguas** (azuis; vermelha quando passa do
+   limite) e os **racks** da sala desenhados embaixo, com os fios. Toque num circuito para escolher em qual régua ele
+   entra (ou numa régua nova — dá para juntar circuitos de telas diferentes), numa régua para escolher o rack (ou um
+   rack novo), num rack para o tipo (5, 9 ou 12 saídas) ou para tirá-lo. O sistema sugere; na primeira mudança a
+   sugestão vira a montagem da sala. Circuito sem régua e régua sem rack o sistema completa sozinho; *Voltar ao
+   automático* desfaz tudo.
+
+Cada mudança grava a sala: o projeto (PDF) e a lista (cabos de 20 m, powercon 10 m, réguas, racks, camlocks,
+controladoras) acompanham. Próxima etapa: **Processamento** (porta → saída da controladora → processadora).
 
 ## Projeto técnico (AC e sinal) — no modelo da Projetech (Syngenta, OS 32465)
 
@@ -185,8 +191,8 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/projeto.js` | monta as folhas da sala com o que a lista sabe e exporta o PDF |
 | `js/ui/receber.js` | recebe a sala do Calculator ("Gerar lista no Painel de LED") |
 | `js/ui/projsala.js` | a tela Projeto da sala (começar pelo projeto) |
-| `js/ui/montagem.js` | o editor da sala: Painéis e Sinal (portas à mão) |
+| `js/ui/montagem.js` | o editor da sala: Painéis, Sinal (portas à mão) e Energia (réguas e racks) |
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 69 testes (cabeamento, portas à mão e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 70 testes (cabeamento, portas à mão, energia da sala e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

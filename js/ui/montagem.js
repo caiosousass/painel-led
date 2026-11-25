@@ -6,13 +6,16 @@
  * 2 · Sinal: o padrão do cabo de cada tela (o canto onde começa e o sentido, como a NovaStar mostra) ou as
  *     portas desenhadas à mão — toque num gabinete e passe pelos outros na ordem do cabo. Mostra os pixels
  *     de cada porta e avisa quando passa do limite.
- * Cada mudança grava a sala: o desenho, o PDF e a lista (cabos, réguas, controladoras) acompanham.
+ * 3 · Energia: os circuitos de powercon (cores), as réguas Steck/Powercon e os racks da sala desenhados embaixo.
+ *     Toque num circuito para escolher a régua dele, numa régua para escolher o rack, num rack para o tipo.
+ *     O sistema sugere; na primeira mudança a sugestão vira a montagem da sala (lista.projeto.energia).
+ * Cada mudança grava a sala: o desenho, o PDF e a lista (cabos, réguas, racks, controladoras) acompanham.
  * O desenho usa METROS como unidade (viewBox): x da esquerda da sala; o chão é y = 0 e para cima é negativo.
  */
 import * as Cab from '../cabeamento.js';
 
 // o que o editor lembra entre um redesenho da página e outro
-export const est = { modo: 'paineis', sel: null, mao: false, desfazer: [], zoom: 1 };
+export const est = { modo: 'paineis', sel: null, mao: false, desfazer: [], zoom: 1, selE: null };
 const ZOOMS = [1, 1.5, 2, 3, 4, 6];
 
 const PADROES = [['inf-esq', 'vertical'], ['sup-esq', 'vertical'], ['inf-dir', 'vertical'], ['sup-dir', 'vertical'],
@@ -31,7 +34,7 @@ function cena(ps) {
   });
   return its;
 }
-function limites(its) {
+function limites(its, modo) {
   const minX = Math.min(0, ...its.map(o => o.x)), maxX = Math.max(1, ...its.map(o => o.x + o.w));
   const maxTop = Math.max(1, ...its.map(o => o.base + o.h));
   const u = Math.max(maxX - minX, maxTop * 2.2) / 100;   // unidade de traço e letra
@@ -40,7 +43,7 @@ function limites(its) {
   const rot = o => ((o.t.nome || 'Tela') + ' · ' + n2(o.w) + ' × ' + n2(o.h) + ' m').length * u * 2.6 * 0.58 / 2 + u * 2;
   const x0 = Math.min(minX - mx, ...its.map(o => o.x + o.w / 2 - rot(o)));
   const x1 = Math.max(maxX + mx, ...its.map(o => o.x + o.w / 2 + rot(o)));
-  return { x0, x1, yT: -(maxTop + Math.max(0.9, u * 9)), yB: Math.max(0.7, u * 7), u };
+  return { x0, x1, yT: -(maxTop + Math.max(0.9, u * 9)), yB: modo === 'energia' ? Math.max(3.2, u * 29) : Math.max(0.7, u * 7), u };
 }
 
 /* ícone de um padrão: 3 × 3 gabinetes com o caminho do cabo, como na NovaStar */
@@ -55,9 +58,9 @@ function iconePadrao(inicio, sentido) {
 }
 
 /* o desenho da sala; temp: { id → plano provisório } enquanto se desenha à mão */
-function svgSala(its, modo, temp, fixo) {
+function svgSala(its, modo, temp, fixo, ps) {
   if (!its.length) return '<div class="mt-vazio">Ponha uma tela com painel e medida (L × A) para montar a sala.</div>';
-  const L = fixo || limites(its), u = L.u, out = [];   // fixo: o enquadramento não muda no meio de um arrasto
+  const L = fixo || limites(its, modo), u = L.u, out = [];   // fixo: o enquadramento não muda no meio de um arrasto
   // chão e régua em metros
   out.push(`<line x1="${L.x0}" y1="0" x2="${L.x1}" y2="0" stroke="#94a3b8" stroke-width="${u * 0.35}"/>`);
   const passo = L.x1 - L.x0 > 40 ? 5 : L.x1 - L.x0 > 16 ? 2 : 1;
@@ -74,13 +77,29 @@ function svgSala(its, modo, temp, fixo) {
       out.push(`<rect x="${o.x - u * 2}" y="${-o.base}" width="${o.w + u * 4}" height="${o.base}" fill="#cbd5e1"/>`);
       out.push(`<text x="${o.x + o.w / 2}" y="${-o.base / 2 + u}" font-size="${Math.min(u * 2.2, o.base * 0.6)}" text-anchor="middle" fill="#475569">palco ${n2(o.base)} m</text>`);
     }
-    const sinal = modo === 'sinal';
+    const sinal = modo === 'sinal', energia = modo === 'energia', colorido = sinal || energia;
     const cor = new Map();
-    if (sinal) pl.dados.portas.forEach((p, i) => p.caminho.forEach(([c, r]) => cor.set(c + ',' + r, i)));
+    (sinal ? pl.dados.portas : energia ? pl.energia.circuitos : []).forEach((p, i) => p.caminho.forEach(([c, r]) => cor.set(c + ',' + r, i)));
     for (let c = 0; c < pl.colunas; c++) for (let r = 0; r < pl.linhas; r++) {
       const i = cor.get(c + ',' + r);
-      const fill = !sinal ? '#1f2937' : i == null ? '#e5e7eb' : Cab.CORES_PORTA[i % Cab.CORES_PORTA.length];
-      out.push(`<rect x="${o.x + c * cw}" y="${y0 + r * ch}" width="${cw}" height="${ch}" fill="${fill}" stroke="${sinal ? '#ffffff' : '#4b5563'}" stroke-width="${m * 0.03}"/>`);
+      const fill = !colorido ? '#1f2937' : i == null ? '#e5e7eb' : Cab.CORES_PORTA[i % Cab.CORES_PORTA.length];
+      out.push(`<rect x="${o.x + c * cw}" y="${y0 + r * ch}" width="${cw}" height="${ch}" fill="${fill}" stroke="${colorido ? '#ffffff' : '#4b5563'}" stroke-width="${m * 0.03}"/>`);
+    }
+    if (energia) {
+      // o caminho do powercon de cada circuito (amarelo) e o número dele
+      const X = c => o.x + (c + 0.5) * cw, Y = r => y0 + (r + 0.5) * ch, tr = m * 0.12;
+      for (const ci of pl.energia.circuitos) {
+        const pts = ci.caminho.map(([c, r]) => [X(c), Y(r)]);
+        const marcado = est.selE && est.selE.tipo === 'circuito' && est.selE.chave === Cab.chaveCircuito(o.it, ci.n);
+        out.push(`<polyline points="${pts.map(q => q.join(',')).join(' ')}" fill="none" stroke="${marcado ? '#0ea5e9' : '#a16207'}" stroke-width="${m * (marcado ? 0.14 : 0.05)}" stroke-linejoin="round"/>`);
+        for (let k = 1; k < pts.length; k++) {
+          const [ax, ay] = pts[k - 1], [bx, by] = pts[k], mx = (ax + bx) / 2, my = (ay + by) / 2, a = Math.atan2(by - ay, bx - ax);
+          out.push(`<polygon points="${[0, 2.5, -2.5].map(d => `${mx + Math.cos(a + d) * tr},${my + Math.sin(a + d) * tr}`).join(' ')}" fill="#a16207"/>`);
+        }
+        const [sx, sy] = pts[0], rr = m * 0.27;
+        out.push(`<circle cx="${sx}" cy="${sy}" r="${rr}" fill="#facc15" stroke="#000000" stroke-width="${rr * 0.16}"/>`);
+        out.push(`<text x="${sx}" y="${sy + rr * 0.38}" font-size="${rr * 1.05}" font-weight="700" text-anchor="middle" fill="#000000">${ci.n}</text>`);
+      }
     }
     if (sinal) {
       const X = c => o.x + (c + 0.5) * cw, Y = r => y0 + (r + 0.5) * ch, tr = m * 0.12;
@@ -100,13 +119,96 @@ function svgSala(its, modo, temp, fixo) {
     out.push(`<text x="${o.x + o.w / 2}" y="${y0 - u * 1.8}" font-size="${u * 2.6}" font-weight="700" text-anchor="middle" fill="${sel ? '#0369a1' : '#334155'}">${esc(o.t.nome || 'Tela')} · ${n2(o.w)} × ${n2(o.h)} m</text>`);
     out.push('</g>');
   }
+  if (modo === 'energia' && ps) out.push(energiaSvg(its, ps, L));
   const vw = L.x1 - L.x0, vh = L.yB - L.yT;
   return `<svg class="mt-svg ${modo === 'sinal' && est.mao ? 'pintando' : modo === 'paineis' ? 'paineis' : ''}" style="width:${est.zoom * 100}%;aspect-ratio:${vw.toFixed(3)} / ${vh.toFixed(3)}" viewBox="${L.x0} ${L.yT} ${vw} ${vh}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Montagem da sala">${out.join('')}</svg>`;
+}
+/* embaixo do chão: as réguas (azuis) ligadas aos circuitos e os racks ligados às réguas */
+function energiaSvg(its, ps, L) {
+  const u = L.u, out = [];
+  const daTela = new Map(its.map(o => [o.it, o]));
+  const yR = u * 9, hR = u * 3.6, wR = u * 7.5, yK = u * 19, hK = u * 6, wK = u * 15;
+  const xr = new Map();
+  for (const r of ps.reguasSala) {
+    const saidas = (r.refs || []).map(({ ti, n }) => {
+      const o = daTela.get(ps.telas[ti]), c = o && o.pl.energia.circuitos[n - 1];
+      return c ? [o.x + (c.caminho[0][0] + 0.5) * (o.w / o.pl.colunas), -o.base] : null;
+    }).filter(Boolean);
+    if (!saidas.length) continue;
+    const x = (Math.min(...saidas.map(q => q[0])) + Math.max(...saidas.map(q => q[0]))) / 2;
+    xr.set(r.n, x);
+    const marcada = est.selE && est.selE.tipo === 'regua' && est.selE.id === r.id;
+    const kw = r.w / 1000, lim = (ps.telas[r.tela] ? +ps.telas[r.tela].cfg.kw_regua || 7.5 : 7.5);
+    for (const [sx, sy] of saidas) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yR}" stroke="${marcada ? '#0ea5e9' : '#475569'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
+    out.push(`<g data-regua="${esc(r.id)}" style="cursor:pointer"><rect x="${x - wR / 2}" y="${yR}" width="${wR}" height="${hR}" rx="${u * 0.6}" fill="${kw > lim + 1e-9 ? '#dc2626' : '#2563eb'}" stroke="${marcada ? '#0ea5e9' : '#1e3a8a'}" stroke-width="${u * (marcada ? 0.7 : 0.25)}"/>`
+      + `<text x="${x}" y="${yR + hR * 0.68}" font-size="${u * 2.3}" font-weight="700" text-anchor="middle" fill="#ffffff">R${r.n}</text></g>`);
+  }
+  // racks: no meio das réguas dele, sem encostar um no outro
+  const ks = ps.racks.map(k => {
+    const xs = k.reguas.map(q => xr.get(q.rg)).filter(v => v != null);
+    return { k, x: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : (L.x0 + L.x1) / 2 };
+  }).sort((a, b) => a.x - b.x);
+  for (let i = 1; i < ks.length; i++) if (ks[i].x - ks[i - 1].x < wK * 1.2) ks[i].x = ks[i - 1].x + wK * 1.2;
+  const sobra = ks.length ? ks[ks.length - 1].x + wK / 2 - L.x1 : 0;
+  if (sobra > 0) ks.forEach(q => { q.x -= sobra; });
+  for (const { k, x } of ks) {
+    const marcado = est.selE && est.selE.tipo === 'rack' && est.selE.id === k.id;
+    for (const q of k.reguas) { const rx = xr.get(q.rg); if (rx != null) out.push(`<line x1="${rx}" y1="${yR + hR}" x2="${x}" y2="${yK}" stroke="#1f2937" stroke-width="${u * 0.35}"/>`); }
+    const saidasK = Cab.RACKS[k.tipo] || 9, cheio = k.reguas.length > saidasK;
+    out.push(`<g data-rack="${esc(k.id)}" style="cursor:pointer"><rect x="${x - wK / 2}" y="${yK}" width="${wK}" height="${hK}" rx="${u * 0.8}" fill="#3f4652" stroke="${marcado ? '#0ea5e9' : cheio ? '#dc2626' : '#111827'}" stroke-width="${u * (marcado ? 0.8 : 0.3)}"/>`
+      + `<text x="${x}" y="${yK + hK * 0.45}" font-size="${u * 2.4}" font-weight="700" text-anchor="middle" fill="#ffffff">Rack ${k.n}</text>`
+      + `<text x="${x}" y="${yK + hK * 0.8}" font-size="${u * 1.9}" text-anchor="middle" fill="#cbd5e1">${saidasK} saídas · ${k.reguas.length} régua${k.reguas.length === 1 ? '' : 's'}</text></g>`);
+  }
+  return out.join('');
 }
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* o painel de baixo: os dados da tela escolhida (Painéis) ou o cabeamento dela (Sinal) */
+/* Energia: o que está escolhido (circuito, régua ou rack) e para onde ele vai */
+function energiaHtml(ctx, ps, pode) {
+  const { B } = ctx;
+  const ro = pode ? '' : 'disabled';
+  const kw = w => n2((w / 1000).toFixed(2)) + ' kW';
+  const nomeTela = ti => (ps.telas[ti] && ps.telas[ti].nome) || 'Tela';
+  const limReg = r => (ps.telas[r.tela] ? +ps.telas[r.tela].cfg.kw_regua || 7.5 : 7.5) * 1000;
+  const opReguas = atual => ps.reguasSala.filter(r => !r.estimada).map(r => `<option value="${B.esc(r.id)}" ${r.id === atual ? 'selected' : ''}>R${r.n} · ${kw(r.w)} · ${B.esc(nomeTela(r.tela))}</option>`).join('') + '<option value="__nova">+ Nova régua</option>';
+  const opRacks = atual => ps.racks.map(k => `<option value="${B.esc(k.id)}" ${k.id === atual ? 'selected' : ''}>Rack ${k.n} · ${Cab.RACKS[k.tipo] || 9} saídas</option>`).join('') + '<option value="__novo">+ Novo rack</option>';
+  const resumo = `<p class="peq mut2" style="margin:0 0 8px">${ps.circuitos} circuito${ps.circuitos === 1 ? '' : 's'} · ${ps.reguas} régua${ps.reguas === 1 ? '' : 's'} · ${ps.racks.length} rack${ps.racks.length === 1 ? '' : 's'}${ps.energia_manual ? ' · <b>montagem sua</b>' : ' · sugestão do sistema'}</p>`;
+  const voltar = ps.energia_manual && pode ? '<button class="btn sm mt-e-auto">Voltar ao automático</button>' : '';
+  const sel = est.selE;
+  let corpo = '<p class="dica" style="margin:0">Toque num circuito (na tela) para escolher a régua dele, numa régua azul para escolher o rack, ou num rack para mudar o tipo.</p>';
+  if (sel && sel.tipo === 'circuito') {
+    const r = ps.reguasSala.find(q => q.circuitos.includes(sel.chave));
+    const [, n] = sel.chave.split(':');
+    const ref = r && r.refs[r.circuitos.indexOf(sel.chave)];
+    const it = ref ? ps.telas[ref.ti] : ps.telas.find(t => Cab.chaveCircuito(t, +n) === sel.chave);
+    const c = it && it.pl && it.pl.energia.circuitos[+n - 1];
+    if (c) corpo = `<div class="grade g2 m1"><div><b>Circuito ${c.n}</b> — ${B.esc(it.nome || 'Tela')}<div class="peq mut2">${c.gabinetes} gabinetes · ${kw(c.w)} no máximo</div></div>
+      <label class="campo"><span>Entra na régua</span><select data-e="circ-regua" ${ro}>${opReguas(r && r.id)}</select></label></div>`;
+  } else if (sel && sel.tipo === 'regua') {
+    const r = ps.reguasSala.find(q => q.id === sel.id);
+    if (r) {
+      const lim = limReg(r), pct = Math.round(r.w / lim * 100), k = ps.racks.find(q => q.n === r.rack);
+      corpo = `<div class="grade g2 m1"><div><b>Régua R${r.n}</b> <span class="${r.w > lim ? 'vermelho' : 'mut2'}">· ${kw(r.w)} de ${n2(lim / 1000)} kW (${pct}%)${r.w > lim ? ' — passa do limite' : ''}</span>
+          <div class="peq mut2">${r.circuitos.length} circuito${r.circuitos.length === 1 ? '' : 's'}: ${r.refs.map(q => B.esc(nomeTela(q.ti)) + ' C' + q.n).join(', ')}</div></div>
+        <label class="campo"><span>Liga no rack</span><select data-e="regua-rack" ${ro}>${opRacks(k && k.id)}</select></label></div>
+        ${pode ? '<button class="btn sm mt-e-tirar-regua" style="margin-top:8px">Tirar a régua</button>' : ''}`;
+    }
+  } else if (sel && sel.tipo === 'rack') {
+    const k = ps.racks.find(q => q.id === sel.id);
+    if (k) {
+      const saidas = Cab.RACKS[k.tipo] || 9;
+      corpo = `<div class="grade g2 m1"><div><b>Rack ${k.n}</b> <span class="${k.reguas.length > saidas ? 'vermelho' : 'mut2'}">· ${k.reguas.length} régua${k.reguas.length === 1 ? '' : 's'} em ${saidas} saídas · ${kw(k.w)}</span>
+          <div class="peq mut2">${k.reguas.map(q => 'R' + q.rg).join(', ') || 'sem régua ainda'}</div></div>
+        <label class="campo"><span>Tipo</span><select data-e="rack-tipo" ${ro}>${Object.entries(Cab.RACKS).map(([id, n]) => `<option value="${id}" ${id === k.tipo ? 'selected' : ''}>${n} saídas</option>`).join('')}</select></label></div>
+        ${pode ? '<button class="btn sm mt-e-tirar-rack" style="margin-top:8px">Tirar o rack</button>' : ''}`;
+    }
+  }
+  return resumo + corpo + (voltar ? `<div style="margin-top:10px">${voltar}</div>` : '');
+}
+
 function ladoHtml(ctx, its, ps, pode) {
+  if (est.modo === 'energia') return energiaHtml(ctx, ps, pode);
   const { B } = ctx;
   const o = its.find(x => x.t.id === est.sel);
   const ro = pode ? '' : 'disabled';
@@ -174,11 +276,11 @@ export function htmlMontagem(ctx, lista, ps, pode) {
   return `<div class="card mt-card">
     <div class="linha-flex" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <h2 style="margin:0" class="cresce">Montagem da sala</h2>
-      <div class="abas mt-modos"><button data-mm="paineis" class="${est.modo === 'paineis' ? 'on' : ''}">1 · Painéis</button><button data-mm="sinal" class="${est.modo === 'sinal' ? 'on' : ''}">2 · Sinal</button></div>
+      <div class="abas mt-modos"><button data-mm="paineis" class="${est.modo === 'paineis' ? 'on' : ''}">1 · Painéis</button><button data-mm="sinal" class="${est.modo === 'sinal' ? 'on' : ''}">2 · Sinal</button><button data-mm="energia" class="${est.modo === 'energia' ? 'on' : ''}">3 · Energia</button></div>
       <div class="linha-flex mt-zoom" style="gap:4px"><button class="btn sm" data-z="-1" title="Afastar">−</button><span class="peq mut2" style="min-width:42px;text-align:center">${Math.round(est.zoom * 100)}%</span><button class="btn sm" data-z="1" title="Aproximar">+</button></div>
       ${pode && est.modo === 'paineis' ? `<button class="btn sm mt-add">${ctx.B.ico('add')} Tela</button>` : ''}
     </div>
-    <div class="mt-quadro">${svgSala(its, est.modo, null)}</div>
+    <div class="mt-quadro">${svgSala(its, est.modo, null, null, ps)}</div>
     <div class="mt-lado">${ladoHtml(ctx, its, ps, pode)}</div>
   </div>`;
 }
@@ -207,7 +309,7 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
     return c >= 0 && c < o.pl.colunas && r >= 0 && r < o.pl.linhas ? [c, r] : null;
   };
   let temp = null, fixo = null;
-  const redesenha = () => { quadro.innerHTML = svgSala(its, est.modo, temp, fixo); ligarToque(); };
+  const redesenha = () => { quadro.innerHTML = svgSala(its, est.modo, temp, fixo, ps); ligarToque(); };
   let arrasto = null, pintura = null;
   const planoCom = (o, man) => Cab.planoTela({ colunas: o.pl.colunas, linhas: o.pl.linhas, painel: o.it.painel, cfg: Object.assign({}, o.it.cfg, { portas_manual: man }) });
   const manualAtual = o => (o.pl.dados.manual ? o.pl.dados.portas.map(p => p.caminho.map(q => q.slice())) : o.pl.dados.portas.map(p => p.caminho.map(q => q.slice())));
@@ -220,10 +322,21 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
     }
     s.addEventListener('pointerdown', e => {
       const p = ponto(e), o = telaEm(p);
+      if (est.modo === 'energia') {
+        const gr = e.target.closest && e.target.closest('[data-regua]'), gk = e.target.closest && e.target.closest('[data-rack]');
+        if (gr) est.selE = { tipo: 'regua', id: gr.dataset.regua };
+        else if (gk) est.selE = { tipo: 'rack', id: gk.dataset.rack };
+        else if (o) {
+          const cel = celulaEm(o, p), ci = cel && o.pl.energia.circuitos.find(c => c.caminho.some(q => q[0] === cel[0] && q[1] === cel[1]));
+          if (ci) { est.selE = { tipo: 'circuito', chave: Cab.chaveCircuito(o.it, ci.n) }; est.sel = o.t.id; }
+        } else return;
+        ctx.atualizar();
+        return;
+      }
       if (est.modo === 'paineis') {
         if (!o) return;
         arrasto = { o, dx: p.x - o.x, x0: o.x, moveu: false, nova: est.sel !== o.t.id };
-        fixo = limites(its);
+        fixo = limites(its, est.modo);
         est.sel = o.t.id;
         quadro.setPointerCapture(e.pointerId);   // no quadro: o svg é refeito a cada passo
         return;
@@ -238,7 +351,7 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
       man.forEach((cam, i) => { const k = cam.findIndex(q => q[0] === cel[0] && q[1] === cel[1]); if (k >= 0) { pi = i; ci = k; } });
       if (pi >= 0) man[pi] = man[pi].slice(0, ci + 1); else { man.push([cel]); pi = man.length - 1; }
       pintura = { o, man, pi };
-      fixo = limites(its);
+      fixo = limites(its, est.modo);
       temp = { [o.t.id]: planoCom(o, man) };
       quadro.setPointerCapture(e.pointerId);
       redesenha();
@@ -325,6 +438,63 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
     est.sel = null;
     salvarTelas({ recalc: true });
   };
+
+  // ---------- Energia ----------
+  /* a sugestão do sistema vira a montagem da sala (na primeira mudança), com ids novos */
+  const montagemDeEnergia = () => {
+    const ids = new Map(), novo = id => { if (!ids.has(id)) ids.set(id, /^(auto|sobra|est)-/.test(id) ? ctx.novoId() : id); return ids.get(id); };
+    const racks = ps.racks.map(k => ({ id: novo(k.id), tipo: k.tipo }));
+    const reguas = ps.reguasSala.filter(r => !r.estimada).map(r => {
+      const k = ps.racks.find(q => q.n === r.rack);
+      return { id: novo(r.id), circuitos: r.circuitos.slice(), rack: k ? novo(k.id) : null };
+    });
+    return { energia: { reguas, racks }, novo };
+  };
+  const gravaEnergia = (energia, sel) => {
+    if (sel) est.selE = sel;
+    salvar({ projeto: Object.assign({}, lista.projeto || {}, { energia }) }, { recalc: true });
+  };
+  const sE = est.selE;
+  card.querySelectorAll('[data-e]').forEach(inp => inp.addEventListener('change', () => {
+    const { energia: en, novo } = montagemDeEnergia();
+    const qual = inp.dataset.e, v = inp.value;
+    if (qual === 'circ-regua' && sE) {
+      const antiga = en.reguas.find(r => r.circuitos.includes(sE.chave));
+      en.reguas.forEach(r => { r.circuitos = r.circuitos.filter(k => k !== sE.chave); });
+      if (v === '__nova') en.reguas.push({ id: ctx.novoId(), circuitos: [sE.chave], rack: antiga ? antiga.rack : null });
+      else { const r = en.reguas.find(q => q.id === novo(v)); if (r) r.circuitos.push(sE.chave); }
+      en.reguas = en.reguas.filter(r => r.circuitos.length);
+      return gravaEnergia(en);
+    }
+    if (qual === 'regua-rack' && sE) {
+      const r = en.reguas.find(q => q.id === novo(sE.id));
+      if (!r) return;
+      if (v === '__novo') { const k = { id: ctx.novoId(), tipo: (en.racks[0] || {}).tipo || 'rack-9' }; en.racks.push(k); r.rack = k.id; }
+      else r.rack = novo(v);
+      return gravaEnergia(en, { tipo: 'regua', id: r.id });
+    }
+    if (qual === 'rack-tipo' && sE) {
+      const k = en.racks.find(q => q.id === novo(sE.id));
+      if (k) k.tipo = v;
+      return gravaEnergia(en, k ? { tipo: 'rack', id: k.id } : null);
+    }
+  }));
+  const tiraR = card.querySelector('.mt-e-tirar-regua');
+  if (tiraR && sE) tiraR.onclick = () => {
+    const { energia: en, novo } = montagemDeEnergia();
+    en.reguas = en.reguas.filter(r => r.id !== novo(sE.id));   // os circuitos dela vão para uma régua nova, sozinhos
+    gravaEnergia(en, { tipo: null });
+  };
+  const tiraK = card.querySelector('.mt-e-tirar-rack');
+  if (tiraK && sE) tiraK.onclick = () => {
+    const { energia: en, novo } = montagemDeEnergia();
+    const id = novo(sE.id);
+    en.racks = en.racks.filter(k => k.id !== id);
+    en.reguas.forEach(r => { if (r.rack === id) r.rack = null; });   // as réguas dele vão para os racks automáticos
+    gravaEnergia(en, { tipo: null });
+  };
+  const eAuto = card.querySelector('.mt-e-auto');
+  if (eAuto) eAuto.onclick = () => { est.selE = null; salvar({ projeto: Object.assign({}, lista.projeto || {}, { energia: null }) }, { recalc: true }); };
 
   // ---------- Sinal ----------
   const muda = (campos) => { const t = telaDe(o.t.id); t.projeto = Object.assign({}, t.projeto || {}, campos); salvarTelas({ recalc: true }); };

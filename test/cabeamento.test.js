@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cab from '../js/cabeamento.js';
 import * as M from '../js/motor.js';
-import { catalogoInicial } from '../js/seed.js';
+import { catalogoInicial, regrasIniciais } from '../js/seed.js';
 
 const V10 = catalogoInicial().find(c => c.id === 'led-v10').painel;
 const tela = (colunas, linhas, cfg, painel = V10) => ({ colunas, linhas, painel, cfg });
@@ -98,4 +98,33 @@ test('posição das telas na sala: a que o editor gravou; sem ela, depois da ant
   const pos = Cab.posicoesDaSala(ps);
   assert.equal(pos.get(ps.telas[0]), 10);
   assert.ok(pos.get(ps.telas[1]) >= 14);   // depois da A, com vão
+});
+
+test('energia montada no editor: régua com circuitos de duas telas, racks escolhidos, o resto automático', () => {
+  const telas = [
+    { id: 'le', nome: 'Lateral esq.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 },
+    { id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 18, altura_m: 3.5 },
+    { id: 'ld', nome: 'Lateral dir.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 }];
+  const cat = catalogoInicial();
+  // a régua A junta os 3 circuitos da lateral esq. com o 1º da central; ela vai num rack de 12 só dela
+  const energia = { reguas: [{ id: 'A', circuitos: ['le:1', 'le:2', 'le:3', 'c:1'], rack: 'K' }], racks: [{ id: 'K', tipo: 'rack-12' }] };
+  const ps = M.planoSala(telas, cat, { energia });
+  assert.equal(ps.energia_manual, true);
+  const A = ps.reguasSala.find(r => r.id === 'A');
+  assert.deepEqual(A.refs.map(q => q.ti + ':' + q.n), ['0:1', '0:2', '0:3', '1:1']);
+  assert.equal(ps.racks[0].tipo, 'rack-12');
+  assert.deepEqual(ps.racks[0].reguas.map(q => q.rg), [A.n]);
+  // os 11 circuitos que sobraram da central viram réguas sozinhos (até 7,5 kW) e o resto vai para racks automáticos
+  const sobra = ps.reguasSala.filter(r => r.id !== 'A');
+  assert.equal(sobra.reduce((s, r) => s + r.circuitos.length, 0), 11 + 3);
+  assert.ok(ps.racks.slice(1).every(k => k.auto));
+  // a lista acompanha: um rack de 12 e os de 9 para o resto
+  const r = M.calcularSugestoes(telas, cat, regrasIniciais(), { sala: { energia } });
+  assert.equal(r.itens.get('rack-12').qtd, 1);
+  assert.equal(r.itens.get('regua-pc').qtd, ps.reguas);
+  // circuito que não existe mais (a tela mudou) é ignorado; voltar ao automático = sem energia
+  const ps2 = M.planoSala(telas, cat, { energia: { reguas: [{ id: 'X', circuitos: ['c:99'] }], racks: [] } });
+  assert.ok(!ps2.reguasSala.some(r => r.id === 'X'));
+  const auto = M.planoSala(telas, cat, {});
+  assert.equal(auto.reguas, 8);
 });

@@ -279,6 +279,9 @@ export function controladorasDaTela(cfg, portas, pixels) {
   return { item: id, qtd: Math.max(Math.ceil(portas / k.portas), Math.ceil((pixels || 0) / k.px)) };
 }
 
+/* a chave de um circuito na sala: "<id da tela>:<número do circuito>" */
+export const chaveCircuito = (it, n) => String((it.tela && it.tela.id) || it.nome || "tela") + ":" + n;
+
 /* O projeto da SALA: telas = [{ tela, nome, colunas, linhas, painel, cfg, estimativa? }] na ordem da folha.
  * estimativa ({ gabinetes, pixels, portas, circuitos }) = tela sem desenho (m², nº de gabinetes).
  * As réguas de todas as telas vão para os racks da sala (Syngenta, Plenária: 8 réguas → 2 racks de 4). */
@@ -306,34 +309,91 @@ export function planoSala(telas, sala) {
     }
     out.push({ tela: t.tela || t, nome: t.nome || '', painel: p, cfg, pl, g, portas, cabos_dados: portas * (cfg.backup ? 2 : 1), circuitos, reguas, ctrl: controladorasDaTela(cfg, portas, g.pixels) });
   }
+  // ---- energia da sala: réguas (uma régua pode pegar circuitos de mais de uma tela) e racks ----
+  // sc.energia (do editor) = { reguas: [{ id, circuitos: ['<tela>:<n>', …], rack: '<id do rack>' }], racks: [{ id, tipo }] }
+  // O que o editor não diz (circuito sem régua, régua sem rack) o sistema completa sozinho.
   const t0 = out[0];
   const tipo = RACKS[sc.rack] ? sc.rack : t0 && RACKS[t0.cfg.rack] ? t0.cfg.rack : 'rack-9';
   const porRack = Math.max(1, Math.round(num(sc.reguas_rack) || (t0 ? num(t0.cfg.reguas_rack) : 0) || 4));
+  const circs = new Map();
+  out.forEach((it, ti) => { if (it.pl) for (const c of it.pl.energia.circuitos) circs.set(chaveCircuito(it, c.n), { ti, n: c.n, w: c.w, gabinetes: c.gabinetes }); });
+  const man = sc.energia && Array.isArray(sc.energia.reguas) ? sc.energia : null;
+  const reguasSala = [], usados = new Set();
+  if (man) for (const r of man.reguas) {
+    const cs = (Array.isArray(r.circuitos) ? r.circuitos : []).filter(k => circs.has(k) && !usados.has(k));
+    cs.forEach(k => usados.add(k));
+    reguasSala.push({ id: String(r.id || 'r' + (reguasSala.length + 1)), circuitos: cs, rackId: r.rack || null, manual: true });
+  }
+  out.forEach((it, ti) => {
+    if (!it.pl) {   // sem desenho: as réguas estimadas pela potência
+      for (let k = 0; k < it.reguas; k++) reguasSala.push({ id: `est-${ti}-${k + 1}`, circuitos: [], tela: ti, estimada: true });
+      return;
+    }
+    if (!man) {     // automático: as réguas que a própria tela montou
+      for (const r of it.pl.energia.reguas) reguasSala.push({ id: `auto-${ti}-${r.n}`, circuitos: r.circuitos.map(n => chaveCircuito(it, n)), auto: true });
+      return;
+    }
+    // com o editor: os circuitos que ficaram sem régua vão para réguas novas (até o limite da régua)
+    const sobra = it.pl.energia.circuitos.filter(c => !usados.has(chaveCircuito(it, c.n)));
+    if (!sobra.length) return;
+    const limR = Math.max(0.1, num(it.cfg.kw_regua) || 7.5) * 1000, maior = Math.max(...sobra.map(c => c.w));
+    const por = maior ? Math.max(1, Math.floor(limR / maior)) : sobra.length;
+    let a = 0;
+    for (const q of dividir(sobra.length, Math.ceil(sobra.length / por))) {
+      reguasSala.push({ id: `sobra-${ti}-${a}`, circuitos: sobra.slice(a, a + q).map(c => chaveCircuito(it, c.n)), auto: true });
+      a += q;
+    }
+  });
+  // a régua conta para a tela do 1º circuito dela (é assim que a lista soma as réguas); vazia não conta
+  const vivas = reguasSala.filter(r => r.estimada || r.circuitos.length);
+  vivas.forEach((r, i) => {
+    r.n = i + 1;
+    if (!r.estimada) r.tela = circs.get(r.circuitos[0]).ti;
+    r.refs = r.circuitos.map(k => ({ ti: circs.get(k).ti, n: circs.get(k).n }));
+    r.w = r.circuitos.reduce((s, k) => s + circs.get(k).w, 0);
+    r.gabinetes = r.circuitos.reduce((s, k) => s + circs.get(k).gabinetes, 0);
+  });
+  const locais = new Map();
+  for (const r of vivas) { const k = (locais.get(r.tela) || 0) + 1; locais.set(r.tela, k); r.local = k; }
+  out.forEach((it, ti) => { it.reguas = locais.get(ti) || 0; });
+  const ref = r => ({ tela: r.tela, n: r.local, rg: r.n, id: r.id });
+
+  // racks: os que o editor fixou e, para o resto, a divisão automática (sala inteira ou por tela)
   const racks = [];
+  const fixos = man && Array.isArray(man.racks) ? man.racks.filter(k => k && k.id) : [];
+  for (const k of fixos) {
+    const rs = vivas.filter(r => r.rackId === k.id);
+    racks.push({ id: String(k.id), tipo: RACKS[k.tipo] ? k.tipo : tipo, reguas: rs.map(ref), manual: true });
+  }
+  const livres = vivas.filter(r => !fixos.some(k => k.id === r.rackId));
   if (sc.racks === 'tela') {
     out.forEach((it, ti) => {
+      const rs = livres.filter(r => r.tela === ti);
       const pr = Math.max(1, Math.round(num(it.cfg.reguas_rack) || 4)), tp = RACKS[it.cfg.rack] ? it.cfg.rack : 'rack-9';
-      let r0 = 0;
-      for (const q of dividir(it.reguas, Math.ceil(it.reguas / pr))) {
-        if (!q) continue;
-        racks.push({ n: racks.length + 1, tipo: tp, reguas: Array.from({ length: q }, (_, k) => ({ tela: ti, n: r0 + k + 1 })) });
-        r0 += q;
+      let a = 0;
+      if (rs.length) for (const q of dividir(rs.length, Math.ceil(rs.length / pr))) {
+        racks.push({ id: `auto-k${racks.length + 1}`, tipo: tp, reguas: rs.slice(a, a + q).map(ref), auto: true });
+        a += q;
       }
     });
-  } else {
-    const todas = out.flatMap((it, ti) => Array.from({ length: it.reguas }, (_, k) => ({ tela: ti, n: k + 1 })));
-    let r0 = 0;
-    if (todas.length) for (const q of dividir(todas.length, Math.ceil(todas.length / porRack))) {
-      racks.push({ n: racks.length + 1, tipo, reguas: todas.slice(r0, r0 + q) });
-      r0 += q;
+  } else if (livres.length) {
+    let a = 0;
+    for (const q of dividir(livres.length, Math.ceil(livres.length / porRack))) {
+      racks.push({ id: `auto-k${racks.length + 1}`, tipo, reguas: livres.slice(a, a + q).map(ref), auto: true });
+      a += q;
     }
   }
+  racks.forEach((k, i) => {
+    k.n = i + 1;
+    k.w = k.reguas.reduce((s, q) => s + vivas[q.rg - 1].w, 0);
+    k.reguas.forEach(q => { vivas[q.rg - 1].rack = k.n; });
+  });
   const ctrl = {};
   for (const it of out) if (it.ctrl.item) ctrl[it.ctrl.item] = (ctrl[it.ctrl.item] || 0) + it.ctrl.qtd;
   const soma = k => out.reduce((s, it) => s + it[k], 0);
   return {
-    cfg: sc, telas: out, racks, controladoras: ctrl,
-    portas: soma('portas'), circuitos: soma('circuitos'), reguas: soma('reguas'),
+    cfg: sc, telas: out, racks, reguasSala: vivas, controladoras: ctrl, energia_manual: !!man,
+    portas: soma('portas'), circuitos: soma('circuitos'), reguas: vivas.length,
     w_total: out.reduce((s, it) => s + it.g.potencia_max_w, 0)
   };
 }
@@ -505,19 +565,25 @@ function salaTecnica(P, ps, area, modo, k) {
     const yBus = yBase + Math.min(8 * k, hBaixo * 0.15);
     const rackH = Math.min(15 * k, hBaixo * 0.3), rackW = Math.min(24 * k, area.w / Math.max(1, ps.racks.length * 1.6));
     const yR = yBase + hBaixo * 0.42;
-    const reg = new Map();
-    for (const g of geo) {
-      const en = g.pl.energia;
-      for (const r of en.reguas) {
-        const xs = saidas(g, r.circuitos.map(n => en.circuitos[n - 1].caminho));
-        const xm = (Math.min(...xs) + Math.max(...xs)) / 2;
-        xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111827', sw: 0.3 * k }));
-        if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111827', sw: 0.3 * k });
-        reg.set(g.ti + '.' + r.n, { xm });
+    // as réguas da sala (uma régua pode juntar circuitos de mais de uma tela)
+    const reg = new Map(), geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
+    for (const r of ps.reguasSala || []) {
+      const xs = [];
+      for (const { ti, n } of r.refs || []) {
+        const g = geoDe.get(ti), c = g && g.pl.energia.circuitos[n - 1];
+        if (!c) continue;
+        const col = c.caminho[0][0], cw = g.w / g.pl.colunas, chave = ti + ':' + col, q = repetida.get(chave) || 0;
+        repetida.set(chave, q + 1);
+        xs.push(g.x0 + (col + 0.5) * cw + q * Math.min(cw * 0.22, 1.6));
       }
+      if (!xs.length) continue;
+      const xm = (Math.min(...xs) + Math.max(...xs)) / 2;
+      xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111827', sw: 0.3 * k }));
+      if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111827', sw: 0.3 * k });
+      reg.set(r.n, { xm });
     }
     const racks = ps.racks.map(rk => {
-      const rs = rk.reguas.map(q => reg.get(q.tela + '.' + q.n)).filter(Boolean);
+      const rs = rk.reguas.map(q => reg.get(q.rg)).filter(Boolean);
       return Object.assign({}, rk, { rs, x: rs.length ? rs.reduce((a, r) => a + r.xm, 0) / rs.length : (xMin + xMax) / 2 });
     });
     espalhar(racks, rackW, xMin, xMax);
