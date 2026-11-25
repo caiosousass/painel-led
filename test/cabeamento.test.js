@@ -10,8 +10,8 @@ const V10 = catalogoInicial().find(c => c.id === 'led-v10').painel;
 const tela = (colunas, linhas, cfg, painel = V10) => ({ colunas, linhas, painel, cfg });
 
 test('é o mesmo arquivo do Calculator (quando a pasta dele está ao lado)', { skip: !existsSync(new URL('../../projetech/cabeamento.js', import.meta.url)) }, () => {
-  const aqui = readFileSync(new URL('../js/cabeamento.js', import.meta.url), 'utf8');
-  const la = readFileSync(new URL('../../projetech/cabeamento.js', import.meta.url), 'utf8');
+  const ler = u => readFileSync(new URL(u, import.meta.url), 'utf8').replace(/\r\n/g, '\n');   // o git pode trocar o fim de linha
+  const aqui = ler('../js/cabeamento.js'), la = ler('../../projetech/cabeamento.js');
   assert.equal(la, aqui, 'copie js/cabeamento.js para projetech/cabeamento.js');
 });
 
