@@ -359,6 +359,7 @@ input[type=search]{background:var(--campo);border:1px solid var(--line);border-r
 .login{min-height:100dvh;display:grid;place-items:center;padding:20px}
 .login .caixa{width:100%;max-width:380px}
 .login .logo{height:46px;display:block;margin:0 auto 18px}
+.login .login-links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:13.5px}
 .login h1{text-align:center;font-size:20px;margin:0 0 4px}
 .login p{text-align:center;color:var(--mut);margin:0 0 18px;font-size:14px}
 

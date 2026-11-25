@@ -380,5 +380,44 @@ export async function abrirDados({ supabaseUrl, supabaseKey, supabase } = {}) {
     if (error) throw error;
   };
 
+  /* ---- acesso pelo próprio app (sem abrir o Supabase) ---- */
+  const semFuncao = e => /led_pedidos_acesso|led_recusar_acesso|led_definir_senha|schema cache|PGRST202/i.test((e && (e.message || e.code)) || '');
+  const avisoSql = 'Falta rodar a parte 5 do supabase-led.sql no Supabase (acesso pelo próprio app).';
+  // o técnico cria a própria conta; fica "pedindo acesso" até o administrador liberar
+  D.cadastrar = async (nome, email, senha) => {
+    const { data, error } = await D.sb.auth.signUp({ email, password: senha, options: { data: { nome } } });
+    if (error) {
+      if (/already|registered|exists/i.test(error.message)) throw new Error('Esse e-mail já tem conta. Volte e use "Entrar" (esqueceu a senha? peça uma provisória ao supervisor).');
+      if (/signups? not allowed|disabled/i.test(error.message)) throw new Error('O cadastro pelo app está desligado no Supabase. Avise o supervisor (Authentication → "Allow new users to sign up").');
+      if (/password/i.test(error.message)) throw new Error('Senha fraca: use pelo menos 6 caracteres.');
+      throw error;
+    }
+    if (!data.session) throw new Error('Conta criada, mas o Supabase pediu confirmação por e-mail. Avise o supervisor para desligar "Confirm email" no Supabase.');
+    return carregarMembro(data.user);
+  };
+  // já foi liberado? (quem estava esperando toca "Já fui liberado")
+  D.conferirAcesso = async () => {
+    const { data } = await D.sb.auth.getSession();
+    if (!data || !data.session) return null;
+    return carregarMembro(data.session.user);
+  };
+  D.pedidosAcesso = async () => {
+    const { data, error } = await D.sb.rpc('led_pedidos_acesso');
+    if (error) throw semFuncao(error) ? new Error(avisoSql) : error;
+    return data || [];
+  };
+  D.recusarAcesso = async userId => {
+    const { error } = await D.sb.rpc('led_recusar_acesso', { p_user: userId });
+    if (error) throw semFuncao(error) ? new Error(avisoSql) : error;
+  };
+  D.definirSenha = async (userId, senha) => {
+    const { error } = await D.sb.rpc('led_definir_senha', { p_user: userId, p_senha: senha });
+    if (error) throw semFuncao(error) ? new Error(avisoSql) : error;
+  };
+  D.trocarMinhaSenha = async senha => {
+    const { error } = await D.sb.auth.updateUser({ password: senha });
+    if (error) throw new Error(/password/i.test(error.message) ? 'Senha fraca ou igual à anterior: use pelo menos 6 caracteres.' : error.message);
+  };
+
   return D;
 }

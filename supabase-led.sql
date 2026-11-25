@@ -85,7 +85,7 @@ begin
   if not public.led_admin() then raise exception 'Só o administrador adiciona pessoas.'; end if;
   select u.id into v_id from auth.users u where lower(u.email) = lower(trim(p_email));
   if v_id is null then
-    raise exception 'Esse e-mail ainda não tem login. Crie em Supabase → Authentication → Users → Add user (marque Auto Confirm).';
+    raise exception 'Esse e-mail ainda não tem conta. Peça para a pessoa abrir o link do app e tocar "Primeiro acesso? Criar minha conta" — depois ela aparece em "Pedindo acesso".';
   end if;
   insert into public.led_membros (user_id, email, nome, papel, permissoes, ativo)
   values (v_id, lower(trim(p_email)), coalesce(nullif(trim(p_nome), ''), p_email), 'membro', coalesce(p_permissoes, '{}'::jsonb), true)
@@ -196,5 +196,57 @@ grant execute on function public.led_pode(text) to authenticated;
 grant execute on function public.led_pode_gravar(text) to authenticated;
 revoke all on public.led_docs from anon;
 revoke all on public.led_membros from anon;
+
+-- ============================================================
+-- 5. Acesso pelo próprio app (sem abrir o Supabase)
+-- ============================================================
+-- O técnico cria a conta no link do app ("Primeiro acesso"). Quem não foi liberado não vê nada (RLS acima);
+-- o administrador vê os pedidos em Equipe e libera ou recusa. Esqueceu a senha: o administrador define uma
+-- provisória em Equipe, e a pessoa troca em Ajustes.
+-- No Supabase, uma vez: Authentication → Sign In / Providers → Email: "Allow new users to sign up" LIGADO e
+-- "Confirm email" DESLIGADO (o e-mail grátis do Supabase só entrega para quem é do time do projeto).
+
+create or replace function public.led_pedidos_acesso()
+returns table (user_id uuid, email text, nome text, criado_em timestamptz)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not public.led_admin() then raise exception 'Só o administrador vê os pedidos de acesso.'; end if;
+  return query
+    select u.id, u.email::text, coalesce(nullif(u.raw_user_meta_data->>'nome', ''), u.email)::text, u.created_at
+    from auth.users u
+    where not exists (select 1 from public.led_membros m where m.user_id = u.id)
+    order by u.created_at desc;
+end $$;
+revoke all on function public.led_pedidos_acesso() from public, anon;
+grant execute on function public.led_pedidos_acesso() to authenticated;
+
+-- Recusar: a conta fica registrada como inativa (não volta para os pedidos; dá para reativar em Equipe)
+create or replace function public.led_recusar_acesso(p_user uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.led_admin() then raise exception 'Só o administrador recusa acesso.'; end if;
+  insert into public.led_membros (user_id, email, nome, papel, ativo)
+  select u.id, u.email, coalesce(nullif(u.raw_user_meta_data->>'nome', ''), u.email), 'membro', false
+  from auth.users u where u.id = p_user
+  on conflict (user_id) do update set ativo = false;
+end $$;
+revoke all on function public.led_recusar_acesso(uuid) from public, anon;
+grant execute on function public.led_recusar_acesso(uuid) to authenticated;
+
+-- Senha provisória para quem esqueceu (só para gente da equipe; não mexe na senha de outro administrador)
+create or replace function public.led_definir_senha(p_user uuid, p_senha text)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.led_admin() then raise exception 'Só o administrador troca a senha de alguém.'; end if;
+  if length(coalesce(p_senha, '')) < 6 then raise exception 'A senha precisa de pelo menos 6 caracteres.'; end if;
+  if not exists (select 1 from public.led_membros m where m.user_id = p_user) then raise exception 'Essa pessoa não é da equipe do Painel de LED.'; end if;
+  if p_user <> auth.uid() and exists (select 1 from public.led_membros m where m.user_id = p_user and m.papel = 'admin') then
+    raise exception 'A senha de outro administrador só ele mesmo troca.';
+  end if;
+  update auth.users set encrypted_password = extensions.crypt(p_senha, extensions.gen_salt('bf')), updated_at = now()
+  where id = p_user;
+end $$;
+revoke all on function public.led_definir_senha(uuid, text) from public, anon;
+grant execute on function public.led_definir_senha(uuid, text) to authenticated;
 
 -- Para conferir:  select nome, email, papel, permissoes, ativo from public.led_membros;

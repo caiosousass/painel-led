@@ -186,16 +186,31 @@ function telaLogin(msg) {
     <img class="logo" src="logo.png" alt="Projetech">
     <h1>Painel de LED</h1>
     ${semAcesso
-      ? `<p>Você entrou como <b>${esc(semAcesso.email)}</b>, mas ainda não faz parte da equipe do Painel de LED.<br>Peça ao supervisor para te adicionar.</p>
+      ? `<p>Você entrou como <b>${esc(semAcesso.email)}</b>. Seu acesso ainda <b>não foi liberado</b>.<br>Avise o supervisor: ele libera em <b>Equipe → Pedindo acesso</b>.</p>
+         <p class="dica erro-msg vermelho">${esc(msg || '')}</p>
+         <button class="btn pri grande cheio conferir">Já fui liberado — entrar</button>
+         <div style="height:8px"></div>
          <button class="btn cheio sair">Sair e entrar com outra conta</button>`
-      : `<p>Entre com o mesmo e-mail e senha do Projetech.</p>
+      : `<p>Entre com o seu e-mail e senha.</p>
          <label class="campo"><span>E-mail</span><input type="email" class="email" autocomplete="username" autofocus></label>
          <div style="height:10px"></div>
          <label class="campo"><span>Senha</span><input type="password" class="senha" autocomplete="current-password"></label>
          <p class="dica erro-msg vermelho">${esc(msg || '')}</p>
-         <button class="btn pri grande cheio entrar">Entrar</button>`}
+         <button class="btn pri grande cheio entrar">Entrar</button>
+         <div class="login-links"><button class="link cadastrar">Primeiro acesso? Criar minha conta</button>
+           <button class="link esqueci">Esqueci minha senha</button></div>`}
   </div></div>`;
-  if (semAcesso) { raiz.querySelector('.sair').onclick = async () => { await D.sair(); D.semAcesso = null; telaLogin(); }; return; }
+  if (semAcesso) {
+    raiz.querySelector('.sair').onclick = async () => { await D.sair(); D.semAcesso = null; telaLogin(); };
+    raiz.querySelector('.conferir').onclick = async () => {
+      try { const u = await D.conferirAcesso(); if (u) return entrarNoApp(); telaLogin('Ainda não foi liberado. Confira com o supervisor.'); }
+      catch (e) { telaLogin('Não deu para conferir: ' + e.message); }
+    };
+    return;
+  }
+  raiz.querySelector('.cadastrar').onclick = () => telaCadastro();
+  raiz.querySelector('.esqueci').onclick = () => B.modal({ titulo: 'Esqueci minha senha',
+    corpo: '<p class="modal-txt">Peça ao supervisor uma <b>senha provisória</b> — ele define em <b>Equipe → Trocar senha</b>, no próprio app. Depois de entrar, troque pela sua em <b>Ajustes → Trocar minha senha</b>.</p>' });
   const ir = async () => {
     const b = raiz.querySelector('.entrar');
     b.disabled = true; b.textContent = 'Entrando…';
@@ -209,6 +224,43 @@ function telaLogin(msg) {
   };
   raiz.querySelector('.entrar').onclick = ir;
   raiz.querySelector('.senha').addEventListener('keydown', e => { if (e.key === 'Enter') ir(); });
+}
+
+/* Primeiro acesso: a pessoa cria a própria conta; fica "pedindo acesso" até o supervisor liberar em Equipe */
+function telaCadastro(msg, valores = {}) {
+  raiz.innerHTML = `<div class="login"><div class="caixa card">
+    <img class="logo" src="logo.png" alt="Projetech">
+    <h1>Criar minha conta</h1>
+    <p>Depois de criar, avise o supervisor para liberar o seu acesso.</p>
+    <label class="campo"><span>Seu nome</span><input class="c-nome" autocomplete="name" value="${esc(valores.nome || '')}" autofocus></label>
+    <div style="height:10px"></div>
+    <label class="campo"><span>E-mail</span><input type="email" class="c-email" autocomplete="username" value="${esc(valores.email || '')}"></label>
+    <div style="height:10px"></div>
+    <label class="campo"><span>Senha (mínimo 6)</span><input type="password" class="c-senha" autocomplete="new-password"></label>
+    <div style="height:10px"></div>
+    <label class="campo"><span>Repita a senha</span><input type="password" class="c-senha2" autocomplete="new-password"></label>
+    <p class="dica erro-msg vermelho">${esc(msg || '')}</p>
+    <button class="btn pri grande cheio criar">Criar minha conta</button>
+    <div class="login-links"><button class="link voltar-login">Já tenho conta — entrar</button></div>
+  </div></div>`;
+  raiz.querySelector('.voltar-login').onclick = () => telaLogin();
+  const criar = async () => {
+    const nome = raiz.querySelector('.c-nome').value.trim(), email = raiz.querySelector('.c-email').value.trim();
+    const s1 = raiz.querySelector('.c-senha').value, s2 = raiz.querySelector('.c-senha2').value;
+    if (nome.length < 2) return telaCadastro('Escreva o seu nome (é assim que o supervisor vai te reconhecer).', { nome, email });
+    if (!/^\S+@\S+\.\S+$/.test(email)) return telaCadastro('E-mail inválido.', { nome, email });
+    if (s1.length < 6) return telaCadastro('A senha precisa de pelo menos 6 caracteres.', { nome, email });
+    if (s1 !== s2) return telaCadastro('As duas senhas não são iguais.', { nome, email });
+    const b = raiz.querySelector('.criar');
+    b.disabled = true; b.textContent = 'Criando…';
+    try {
+      const u = await D.cadastrar(nome, email, s1);
+      if (u) return entrarNoApp();            // (só acontece se já estava liberado)
+      telaLogin();                             // mostra "seu acesso ainda não foi liberado"
+    } catch (e) { telaCadastro(e.message, { nome, email }); }
+  };
+  raiz.querySelector('.criar').onclick = criar;
+  raiz.querySelector('.c-senha2').addEventListener('keydown', e => { if (e.key === 'Enter') criar(); });
 }
 
 /* ---------------- casca ---------------- */

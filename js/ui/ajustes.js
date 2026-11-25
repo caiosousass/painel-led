@@ -10,7 +10,7 @@ export function render(ctx) {
   <div class="cab"><div><h1>Ajustes</h1></div></div>
   <div class="card"><h2>Você</h2>
     <p style="margin:0 0 10px"><b>${B.esc(u.nome || '—')}</b> ${u.email ? '<span class="muted">· ' + B.esc(u.email) + '</span>' : ''} · ${ctx.admin() ? B.pill('acesso total', 'verde') : B.pill('acesso definido pelo administrador', '')}</p>
-    ${nuvem ? `<button class="btn sair">${B.ico('sair')} Sair</button>` : `<button class="btn trocar">Trocar o nome deste aparelho</button>`}
+    ${nuvem ? `<div class="linha-flex"><button class="btn minha-senha">${B.ico('lock')} Trocar minha senha</button><button class="btn sair">${B.ico('sair')} Sair</button></div>` : `<button class="btn trocar">Trocar o nome deste aparelho</button>`}
   </div>
   <div class="card"><h2>${B.ico(B.temaEfetivo() === 'claro' ? 'sol' : 'lua')} Aparência</h2>
     <div class="abas">${[['escuro', 'Escuro'], ['claro', 'Claro'], ['auto', 'Automático']].map(([k, t]) => `<button data-tema="${k}" class="${B.temaEscolhido() === k ? 'on' : ''}">${t}</button>`).join('')}</div>
@@ -55,6 +55,26 @@ export function ligar(el, ctx) {
   });
   if (q('.sair')) q('.sair').onclick = async () => {
     try { await D.sair(); location.reload(); } catch (e) { B.toast(e.message, { tipo: 'erro', tempo: 8000 }); }
+  };
+  if (q('.minha-senha')) q('.minha-senha').onclick = async () => {
+    const r = await B.modal({
+      titulo: 'Trocar minha senha',
+      corpo: `<label class="campo"><span>Senha nova (mínimo 6)</span><input type="password" class="s1" autocomplete="new-password" autofocus></label>
+        <label class="campo" style="margin-top:10px"><span>Repita a senha nova</span><input type="password" class="s2" autocomplete="new-password"></label>`,
+      botoes: [{ txt: 'Cancelar', valor: null }, {
+        txt: 'Trocar', cls: 'pri',
+        validar: m => {
+          const a = m.querySelector('.s1'), b = m.querySelector('.s2');
+          if (a.value.length < 6) { a.classList.add('erro'); B.toast('Use pelo menos 6 caracteres.'); return false; }
+          if (a.value !== b.value) { b.classList.add('erro'); B.toast('As duas senhas não são iguais.'); return false; }
+          return true;
+        },
+        valor: m => m.querySelector('.s1').value
+      }]
+    });
+    if (!r) return;
+    try { await D.trocarMinhaSenha(r); B.toast('Senha trocada. Use a nova da próxima vez que entrar.'); }
+    catch (e) { B.toast(e.message || String(e), { tipo: 'erro', tempo: 8000 }); }
   };
   if (q('.trocar')) q('.trocar').onclick = async () => {
     const n = await B.pedirTexto('Quem está usando este aparelho?', { rotulo: 'Nome', valor: ctx.quem(), obrigatorio: true });
