@@ -1,0 +1,9 @@
+{
+  "name": "projetech-setor-led",
+  "private": true,
+  "type": "module",
+  "description": "Projetech · Painel de LED — listas de separação, estoque, manutenção e bancada",
+  "scripts": {
+    "test": "node --test"
+  }
+}
