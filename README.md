@@ -36,6 +36,10 @@ equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo o
      sala*, *Nova sala neste evento*; numa lista solta: *Dividir em salas*. OS, nome e cliente mudam em todas
      as salas; datas e local podem ser diferentes por sala (o app pergunta). Itens "por lista" (ferramentas,
      fita, cinta, rack 5…) vão para **cada sala**, porque cada uma é carregada à parte.
+   - **Cartão da lista** (Listas, Início, evento): mostra as telas (painel e medida), cliente e local, um botão
+     **Projeto** e o **⋯** com as ações sem precisar entrar na lista — abrir a lista ou o projeto, imprimir,
+     exportar o projeto, **fixar no topo**, dividir em salas, duplicar, cancelar e excluir. As fixadas vêm
+     primeiro em Listas, com o alfinete, para a equipe toda (um evento sobe se alguma sala dele estiver fixada).
    - **Estrutura e palco (a mesma regra do Projetech Calculator)**: em cada tela no chão, marque se o painel
      está **em cima do palco** (altura, fundo e se a mão francesa apoia no palco ou sai do chão, atrás dele).
      A mão francesa empilha 1,92 / 1,44 / 0,96 até o mais perto do topo sem passar; fileiras nas emendas, de
