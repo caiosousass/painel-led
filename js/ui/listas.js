@@ -3,10 +3,22 @@
  * Mais duplicar uma anterior. */
 import { lerXlsx, abasDoPdf, interpretarOS } from '../os.js';
 import { textoDoPdf } from '../pdf.js';
-import { recalcularLista } from './lista.js';
+import { recalcularLista, menuLista } from './lista.js';
 
 let filtro = 'abertas';
 let busca = '';
+
+/* As telas de uma lista num resumo curto: "V10 6 × 3,5 m · NT 4 × 3 m" */
+function resumoTelas(ctx, l) {
+  const { B, M } = ctx, cat = ctx.catIdx();
+  const partes = (l.telas || []).map(t => {
+    const c = cat.get(t.painel), g = c && c.painel ? M.geometria(t, c.painel) : null;
+    const modelo = c ? c.nome.replace('Case de Led ', '').replace(/^P[\d.,]+mm\s*/i, '').replace(/^Absen\s*/i, '') : 'sem painel';
+    const med = g && g.largura_m ? `${B.num(g.largura_m)} × ${B.num(g.altura_m)} m` : g && g.gabinetes ? `${g.gabinetes} gab` : 'sem medida';
+    return `${modelo} ${med}`;
+  });
+  return partes.length > 3 ? partes.slice(0, 3).join(' · ') + ` · +${partes.length - 3}` : partes.join(' · ');
+}
 
 export function cartaoLista(ctx, l, { soSala } = {}) {
   const { B, M } = ctx;
@@ -16,6 +28,10 @@ export function cartaoLista(ctx, l, { soSala } = {}) {
   const cat = ctx.catIdx();
   let gab = 0;
   for (const t of l.telas || []) { const c = cat.get(t.painel); if (c && c.painel) gab += M.geometria(t, c.painel).gabinetes; }
+  // sem evento ainda: o nome vem da sala ou das telas, em vez de "Lista sem nome"
+  const telasTxt = resumoTelas(ctx, l);
+  const titulo = soSala ? (l.sala || B.nomeLista(l)) : l.evento ? B.nomeLista(l) : (l.sala || (telasTxt && !/sem (medida|painel)/.test(telasTxt.split(' · ')[0]) ? 'Sem nome · ' + telasTxt.split(' · ')[0] : 'Lista sem nome'));
+  const extra = [l.cliente, l.local].filter(Boolean).map(B.esc).join(' · ');
   const dias = l.ida ? M.D.dif(hoje, l.ida) : null;
   const quando = l.ida ? `${B.dataSemana(l.ida)}${l.volta && l.volta !== l.ida ? ' → ' + B.dataSemana(l.volta) : ''}` : 'sem data';
   let rodape;
@@ -25,16 +41,23 @@ export function cartaoLista(ctx, l, { soSala } = {}) {
   } else if (['separando', 'separada', 'pronta', 'em_evento'].includes(l.status) && prog.total) {
     rodape = `${B.barra(prog.pct, prog.pct === 100 ? 'verde' : '')}<span class="num">${prog.resolvidos}/${prog.total} · ${prog.pct}%</span>`;
   } else rodape = `<span>${linhas.filter(M.linhaAtiva).length} itens</span>`;
-  return `<button class="lcard" data-lista="${B.esc(l.id)}">
-    <div class="l1"><b>${B.esc(soSala ? l.sala || B.nomeLista(l) : B.nomeLista(l))}</b>${B.pillStatus(l.status)}</div>
+  return `<div class="lcard" data-lista="${B.esc(l.id)}" role="button" tabindex="0">
+    <div class="l1">${l.fixada ? `<span class="lcard-fixa" title="Fixada no topo">${B.ico('fixar')}</span>` : ''}<b>${B.esc(titulo)}</b>${B.pillStatus(l.status)}<button class="icon-btn sm lcard-mais" data-mais="${B.esc(l.id)}" title="Mais ações" aria-label="Mais ações">${B.ico('mais')}</button></div>
     <div class="l2"><span>${l.os ? 'OS ' + B.esc(l.os) : 'sem OS'}</span><span>${quando}${dias != null && dias >= 0 && dias <= 7 && !['retornada', 'em_evento', 'cancelada'].includes(l.status) ? ' · <b class="' + (dias <= 1 ? 'vermelho' : 'amarelo') + '">' + B.emDias(dias) + '</b>' : ''}</span>
       <span>${(l.telas || []).length} tela${(l.telas || []).length === 1 ? '' : 's'}${gab ? ' · ' + gab + ' gab' : ''}</span></div>
-    <div class="l3">${rodape}</div>
-  </button>`;
+    ${telasTxt || extra ? `<div class="l4">${telasTxt ? `<span>${B.esc(telasTxt)}</span>` : ''}${extra ? `<span class="mut2">${extra}</span>` : ''}</div>` : ''}
+    <div class="l3">${rodape}<span class="lcard-acoes">${(l.telas || []).length ? `<button class="btn sm lcard-proj" data-proj="${B.esc(l.id)}">${B.ico('painel')} Projeto</button>` : ''}</span></div>
+  </div>`;
 }
 
 export function ligarCartoes(el, ctx) {
-  el.querySelectorAll('[data-lista]').forEach(b => { b.onclick = () => ctx.ir('lista/' + b.dataset.lista); });
+  el.querySelectorAll('[data-lista]').forEach(b => {
+    b.onclick = e => { if (e.target.closest('button')) return; ctx.ir('lista/' + b.dataset.lista); };
+    b.onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === b) { e.preventDefault(); ctx.ir('lista/' + b.dataset.lista); } };
+  });
+  // ⋯: as ações da lista sem precisar entrar nela (excluir, duplicar, imprimir…)
+  el.querySelectorAll('[data-mais]').forEach(b => { b.onclick = e => { e.stopPropagation(); const l = ctx.lista(b.dataset.mais); if (l) menuLista(ctx, l, { fora: true }); }; });
+  el.querySelectorAll('[data-proj]').forEach(b => { b.onclick = e => { e.stopPropagation(); ctx.ir('projeto/' + b.dataset.proj); }; });
   el.querySelectorAll('[data-evento]').forEach(b => { b.onclick = () => ctx.ir('evento/' + b.dataset.evento); });
 }
 
@@ -66,6 +89,9 @@ export function render(ctx) {
   const conta = k => todas.filter(grupos[k]).length;
   let ls = todas.filter(grupos[filtro]).filter(l => !q || norm([l.evento, l.sala, l.os, l.cliente, l.local].join(' ')).includes(q));
   ls.sort((a, b) => (filtro === 'retornadas' ? String(b.ida || '').localeCompare(String(a.ida || '')) : String(a.ida || '9999').localeCompare(String(b.ida || '9999'))));
+  // fixadas no topo (um evento sobe se alguma sala dele estiver fixada)
+  const fixa = l => !!(l.fixada || (l.grupo && todas.some(x => x.grupo === l.grupo && x.fixada)));
+  ls = ls.filter(fixa).concat(ls.filter(l => !fixa(l)));
   // salas do mesmo evento aparecem juntas, debaixo do evento (todas as salas, mesmo as de outro filtro)
   const vistos = new Set();
   const blocos = [];

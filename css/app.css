@@ -198,6 +198,14 @@ input[type=search]{background:var(--campo);border:1px solid var(--line);border-r
 .lcard .l1 b{font-size:15.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lcard .l2{font-size:12.5px;color:var(--mut);margin:4px 0 8px;display:flex;gap:10px;flex-wrap:wrap}
 .lcard .l3{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+.lcard .l1 .lcard-mais{margin:-6px -6px -6px 0;flex:none}
+.lcard .lcard-fixa{display:inline-flex;color:var(--acc);flex:none}
+.lcard .lcard-fixa svg{width:16px;height:16px}
+.lcard .l4{font-size:12.5px;color:var(--txt);margin:-2px 0 8px;display:flex;gap:4px 12px;flex-wrap:wrap}
+.lcard .l4 span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.lcard .lcard-acoes{margin-left:auto;display:flex;gap:6px}
+.lcard .lcard-acoes .btn svg{width:15px;height:15px}
+.lcard:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .lcard .l3 .barra{flex:1}
 /* evento com várias salas: ocupa a linha inteira; as salas ficam dentro */
 .ecard{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;padding:10px;background:var(--vidro2)}

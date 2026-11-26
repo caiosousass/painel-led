@@ -582,9 +582,13 @@ export async function registrarConferencia(ctx, lista) {
   ctx.atualizar();
 }
 
-async function menuLista(ctx, lista) {
+/* As ações de uma lista. fora: chamado do cartão (Listas, Início, evento) — abre também a lista e o projeto,
+ * e depois de excluir fica onde está. */
+export async function menuLista(ctx, lista, { fora } = {}) {
   const { B, M } = ctx;
   const ops = [['imprimir', 'Imprimir / salvar PDF'], ['projeto', 'Exportar projeto (PDF)']];
+  if (fora) ops.unshift(['abrir', 'Abrir a lista'], ['abrir-projeto', 'Abrir o projeto da sala']);
+  if (ctx.pode('listas')) ops.push(['fixar', lista.fixada ? 'Desafixar do topo' : 'Fixar no topo']);
   const podeMexerTelas = ctx.pode('listas') && ['rascunho', 'pronta'].includes(lista.status) && !ctx.linhasDa(lista.id).some(M.temSeparacao);
   if (lista.grupo) {
     ops.unshift(['evento', 'Abrir o evento (todas as salas)']);
@@ -601,6 +605,17 @@ async function menuLista(ctx, lista) {
     botoes: [{ txt: 'Fechar', valor: null }],
     aoAbrir: (el, fechar) => el.querySelectorAll('[data-v]').forEach(b => { b.onclick = () => fechar(b.dataset.v); })
   });
+  if (v === 'abrir') ctx.ir('lista/' + lista.id);
+  if (v === 'fixar') {
+    // vale para a equipe toda (fica na lista)
+    lista.fixada = !lista.fixada;
+    lista.fixada_por = lista.fixada ? ctx.quem() : null;
+    await ctx.D.salvar('listas', lista, { silencioso: true });
+    await ctx.D.registrar('lista_fixada', `${lista.fixada ? 'fixou no topo' : 'desafixou'} a lista ${B.nomeLista(lista)}`, lista.id);
+    B.toast(lista.fixada ? 'Fixada no topo.' : 'Desafixada.');
+    ctx.atualizar();
+  }
+  if (v === 'abrir-projeto') ctx.ir('projeto/' + lista.id);
   if (v === 'imprimir') imprimirLista(ctx, lista);
   if (v === 'projeto') exportar(ctx, lista);
   if (v === 'evento') ctx.ir('evento/' + lista.grupo);
@@ -630,7 +645,8 @@ async function menuLista(ctx, lista) {
     await ctx.D.excluir('linhas', ctx.linhasDa(lista.id).map(l => l.id), { silencioso: true });
     await ctx.D.excluir('listas', lista.id);
     await ctx.D.registrar('lista_excluida', `excluiu a lista ${B.nomeLista(lista)} (OS ${lista.os || '—'})`, null);
-    ctx.ir('listas');
+    B.toast('Lista excluída.');
+    if (fora) ctx.atualizar(); else ctx.ir('listas');
   }
 }
 
