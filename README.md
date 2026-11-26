@@ -88,9 +88,14 @@ No **Projeto da sala**, em cima, a sala vista de frente, em escala (zoom − / +
    rack novo), num rack para o tipo (5, 9 ou 12 saídas) ou para tirá-lo. O sistema sugere; na primeira mudança a
    sugestão vira a montagem da sala. Circuito sem régua e régua sem rack o sistema completa sozinho; *Voltar ao
    automático* desfaz tudo.
+4. **Processamento** — embaixo do chão, as **controladoras** (cada porta ligada na sua, com saídas usadas e pixels;
+   vermelha quando passa) e a **processadora**. Toque numa porta para escolher a controladora (ou uma nova: MCTRL660,
+   Taurus TB60 ou TB1) e a saída (ocupada troca de lugar), numa controladora para o tipo ou para tirá-la, e dê o nome
+   da processadora. No automático cada tela enche as controladoras dela até as saídas ou os pixels acabarem (12 portas
+   de 592 mil px → 3 por MCTRL660). A folha de Sinal desenha uma caixa por controladora com as portas dela.
 
 Cada mudança grava a sala: o projeto (PDF) e a lista (cabos de 20 m, powercon 10 m, réguas, racks, camlocks,
-controladoras) acompanham. Próxima etapa: **Processamento** (porta → saída da controladora → processadora).
+controladoras) acompanham.
 
 ## Projeto técnico (AC e sinal) — no modelo da Projetech (Syngenta, OS 32465)
 
@@ -191,8 +196,8 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/projeto.js` | monta as folhas da sala com o que a lista sabe e exporta o PDF |
 | `js/ui/receber.js` | recebe a sala do Calculator ("Gerar lista no Painel de LED") |
 | `js/ui/projsala.js` | a tela Projeto da sala (começar pelo projeto) |
-| `js/ui/montagem.js` | o editor da sala: Painéis, Sinal (portas à mão) e Energia (réguas e racks) |
+| `js/ui/montagem.js` | o editor da sala: Painéis, Sinal (portas à mão), Energia (réguas e racks) e Processamento |
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 70 testes (cabeamento, portas à mão, energia da sala e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 71 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

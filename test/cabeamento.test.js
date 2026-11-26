@@ -128,3 +128,28 @@ test('energia montada no editor: régua com circuitos de duas telas, racks escol
   const auto = M.planoSala(telas, cat, {});
   assert.equal(auto.reguas, 8);
 });
+
+test('processamento: portas nas controladoras (automático enche saídas e pixels; editor liga à mão)', () => {
+  const telas = [
+    { id: 'le', nome: 'Lateral esq.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 },
+    { id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 18, altura_m: 3.5 },
+    { id: 'ld', nome: 'Lateral dir.', painel: 'led-v10', modo: 'medida', largura_m: 4.5, altura_m: 2.5 }];
+  const cat = catalogoInicial();
+  const auto = M.planoSala(telas, cat, {});
+  // central: 12 portas de 592.704 px → 3 por MCTRL660 (a 4ª passaria de 2,3 milhões) → 4 controladoras
+  assert.deepEqual(auto.processamento.ctrls.map(c => c.usadas), [3, 3, 3, 3, 3, 3]);
+  assert.equal(auto.controladoras['send-660'], 6);
+  // à mão: uma TB60 só para as laterais (saídas 1–3 a esq., 4 a dir. P1); o resto continua automático
+  const processamento = {
+    ctrls: [{ id: 'T', tipo: 'taurus-tb60' }],
+    ligacoes: { 'le:1': { ctrl: 'T', saida: 1 }, 'le:2': { ctrl: 'T', saida: 2 }, 'le:3': { ctrl: 'T', saida: 3 }, 'ld:1': { ctrl: 'T', saida: 4 }, 'ld:2': { ctrl: 'T', saida: 4 } } };
+  const ps = M.planoSala(telas, cat, { processamento });
+  const T = ps.processamento.ctrls[0];
+  assert.equal(T.tipo, 'taurus-tb60');
+  assert.deepEqual(T.saidas.map(p => p.chave), ['le:1', 'le:2', 'le:3', 'ld:1']);   // saída 4 já ocupada: ld:2 vai para a automática
+  assert.equal(ps.controladoras['taurus-tb60'], 1);
+  assert.equal(ps.controladoras['send-660'], 4 + 1);   // central 4 + lateral dir. (P2 e P3)
+  const r = M.calcularSugestoes(telas, cat, regrasIniciais(), { sala: { processamento } });
+  assert.equal(r.itens.get('taurus-tb60').qtd, 1);
+  assert.equal(r.itens.get('send-660').qtd, 5 + 1);   // + 1 de reserva
+});

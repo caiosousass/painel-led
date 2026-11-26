@@ -388,11 +388,65 @@ export function planoSala(telas, sala) {
     k.w = k.reguas.reduce((s, q) => s + vivas[q.rg - 1].w, 0);
     k.reguas.forEach(q => { vivas[q.rg - 1].rack = k.n; });
   });
+  // ---- processamento: cada porta numa saída de controladora; as controladoras vão para a processadora ----
+  // sc.processamento (do editor) = { ctrls: [{ id, tipo }], ligacoes: { '<tela>:<porta>': { ctrl: '<id>', saida: 1… } } }
+  // Porta sem ligação vai para as controladoras automáticas da tela dela (enche cada uma até as saídas
+  // ou os pixels dela acabarem: 12 portas de 592 mil px → 3 por MCTRL660 → 4 controladoras).
+  const portasSala = [], porPorta = new Map();
+  out.forEach((it, ti) => {
+    if (it.pl) for (const p of it.pl.dados.portas) portasSala.push({ chave: chaveCircuito(it, p.n), ti, n: p.n, px: p.pixels });
+    else for (let k = 0; k < it.portas; k++) portasSala.push({ chave: `est-${ti}-${k + 1}`, ti, n: k + 1, px: it.portas ? it.g.pixels / it.portas : 0, estimada: true });
+  });
+  portasSala.forEach(p => porPorta.set(p.chave, p));
+  const proc = sc.processamento && Array.isArray(sc.processamento.ctrls) ? sc.processamento : null;
+  const ctrls = [], ligadas = new Set();
+  if (proc) {
+    for (const c of proc.ctrls) if (c && c.id) ctrls.push({ id: String(c.id), tipo: CONTROLADORAS[c.tipo] ? c.tipo : 'send-660', saidas: [], manual: true });
+    for (const [chave, l] of Object.entries(proc.ligacoes || {})) {
+      const p = porPorta.get(chave), c = l && ctrls.find(x => x.id === l.ctrl);
+      if (!p || !c || ligadas.has(chave)) continue;
+      const cap = CONTROLADORAS[c.tipo].portas;
+      let k = Math.round(num(l.saida)) - 1;
+      if (!(k >= 0 && k < cap) || c.saidas[k]) { k = -1; for (let j = 0; j < cap; j++) if (!c.saidas[j]) { k = j; break; } }
+      if (k < 0) continue;                       // controladora cheia: a porta vai para a automática
+      c.saidas[k] = p; ligadas.add(chave);
+    }
+  }
+  out.forEach((it, ti) => {
+    const resto = portasSala.filter(p => p.ti === ti && !ligadas.has(p.chave));
+    const tipoC = it.cfg.controladora === 'nenhuma' ? null : CONTROLADORAS[it.cfg.controladora] ? it.cfg.controladora : 'send-660';
+    if (!resto.length || !tipoC) return;
+    const C = CONTROLADORAS[tipoC];
+    let cur = null;
+    for (const p of resto) {
+      if (!cur || cur.saidas.length >= C.portas || (cur.saidas.length && cur.px + p.px > C.px)) {
+        cur = { id: `auto-c-${ti}-${ctrls.length + 1}`, tipo: tipoC, saidas: [], px: 0, auto: true };
+        ctrls.push(cur);
+      }
+      cur.saidas.push(p); cur.px += p.px;
+    }
+  });
+  ctrls.forEach((c, i) => {
+    c.n = i + 1;
+    const ps_ = c.saidas.filter(Boolean);
+    c.px = ps_.reduce((s, p) => s + p.px, 0);
+    c.usadas = ps_.length;
+    c.tela = ps_.length ? ps_[0].ti : (out.length ? 0 : null);   // a lista conta a controladora na tela da 1ª porta dela
+  });
+  // por tela (é assim que a lista soma as controladoras): quantas de cada tipo
+  out.forEach((it, ti) => {
+    const mine = ctrls.filter(c => c.tela === ti), por = {};
+    mine.forEach(c => { por[c.tipo] = (por[c.tipo] || 0) + 1; });
+    it.ctrls = por;
+    const tipos = Object.keys(por);
+    it.ctrl = { item: tipos.length ? tipos[0] : null, qtd: mine.length };
+  });
   const ctrl = {};
-  for (const it of out) if (it.ctrl.item) ctrl[it.ctrl.item] = (ctrl[it.ctrl.item] || 0) + it.ctrl.qtd;
+  for (const c of ctrls) ctrl[c.tipo] = (ctrl[c.tipo] || 0) + 1;
   const soma = k => out.reduce((s, it) => s + it[k], 0);
   return {
     cfg: sc, telas: out, racks, reguasSala: vivas, controladoras: ctrl, energia_manual: !!man,
+    processamento: { ctrls, manual: !!proc, portas: portasSala },
     portas: soma('portas'), circuitos: soma('circuitos'), reguas: vivas.length,
     w_total: out.reduce((s, it) => s + it.g.potencia_max_w, 0)
   };
@@ -602,32 +656,46 @@ function salaTecnica(P, ps, area, modo, k) {
   }
   if (comSinal) {
     const yBusS = yBase + Math.min(7 * k, hBaixo * 0.13);
-    const cH = 4.6 * k, cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, geo.length * 2.2)));
+    const lista = (ps.processamento && ps.processamento.ctrls) || [];
+    const cH = 4.6 * k, cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, lista.length * 1.6)));
     const yC = yBase + hBaixo * 0.3;
-    const ctrls = geo.map(g => {
-      const xs = saidas(g, g.pl.dados.portas.map(p => p.caminho));
-      if (!xs.length) return { g, x: g.xm, xb: g.xm };
+    // cada controladora: as portas ligadas nela descem até um barramento e dele até a controladora
+    const geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
+    const ctrls = lista.map(c => {
+      const xs = [];
+      for (const p of c.saidas) {
+        const g = p && geoDe.get(p.ti), pt = g && g.pl.dados.portas[p.n - 1];
+        if (!pt) continue;
+        const col = pt.caminho[0][0], cw = g.w / g.pl.colunas, chave = p.ti + ':' + col, q = repetida.get(chave) || 0;
+        repetida.set(chave, q + 1);
+        xs.push(g.x0 + (col + 0.5) * cw + q * Math.min(cw * 0.22, 1.6));
+      }
+      const g0 = c.tela != null ? geoDe.get(c.tela) : null;
+      if (!xs.length) return { c, x: g0 ? g0.xm : (xMin + xMax) / 2, xb: null };
       xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBusS, stroke: '#111827', sw: 0.25 * k }));
       const a = Math.min(...xs), b = Math.max(...xs);
       if (xs.length > 1) P.push({ t: 'line', x1: a, y1: yBusS, x2: b, y2: yBusS, stroke: '#111827', sw: 0.25 * k });
-      return { g, x: g.xm, xb: (a + b) / 2 };
+      return { c, x: (a + b) / 2, xb: (a + b) / 2 };
     });
     espalhar(ctrls, cW, xMin, xMax);
-    for (const c of ctrls) {
-      const it = c.g.it, nome = (CONTROLADORAS[it.ctrl.item] || {}).nome || 'Controladora';
-      P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
+    for (const cc of ctrls) {
+      const c = cc, ct = cc.c, nome = (CONTROLADORAS[ct.tipo] || {}).nome || 'Controladora';
+      const nomes = ct.saidas.map((p, i) => (p ? `${i + 1}: ${(ps.telas[p.ti] && ps.telas[p.ti].nome) || 'Tela'} P${p.n}` : null)).filter(Boolean);
+      const it = { ctrl: { qtd: 1 }, portas: ct.usadas, cfg: {} };
+      if (c.xb != null) P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
       // a controladora: aparelho de 1U preto, com o display e as portas
       P.push({ t: 'rect', x: c.x - cW / 2, y: yC, w: cW, h: cH, fill: '#1f2937', stroke: '#0b0f17', sw: 0.3 * k, r: 0.6 * k });
       P.push({ t: 'rect', x: c.x - cW * 0.44, y: yC + cH * 0.25, w: cW * 0.2, h: cH * 0.5, fill: '#0ea5e9' });
       for (let i = 0; i < 4; i++) P.push({ t: 'rect', x: c.x + cW * 0.14 + i * cW * 0.075, y: yC + cH * 0.32, w: cW * 0.05, h: cH * 0.36, fill: '#93c5fd' });
       P.push({ t: 'text', x: c.x - cW * 0.04, y: yC + cH * 0.66, txt: nome, size: 4.6 * k, bold: true, align: 'center', color: '#ffffff' });
-      P.push({ t: 'text', x: c.x + 1.2 * k, y: yC + cH + 3.2 * k, txt: `${it.ctrl.qtd > 1 ? it.ctrl.qtd + ' × ' + nome + ' · ' : ''}${it.portas} porta${it.portas === 1 ? '' : 's'}${it.cfg.backup ? ' + backup' : ''}`, size: 5.5 * k, color: '#111827' });
+      P.push({ t: 'text', x: c.x, y: yC + cH + 3.2 * k, txt: corta(`${nome} ${ct.n} · ${it.portas} porta${it.portas === 1 ? '' : 's'}`, cW * 1.15, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
+      if (nomes.length) P.push({ t: 'text', x: c.x, y: yC + cH + 6 * k, txt: corta(nomes.join(' · '), cW * 1.15, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
     }
     const proc = ps.cfg.processadora || (geo.length > 1 ? 'Processadora' : '');
     if (proc) {
       const pW = 34 * k, pH = 13 * k, yP = yBase + hBaixo * 0.62;
       const xP = Math.min(xMax - pW / 2, Math.max(xMin + pW / 2, (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2));
-      const yJ = (yC + cH + 5 * k + yP) / 2;
+      const yJ = (yC + cH + 8 * k + yP) / 2;   // abaixo dos nomes das controladoras
       for (const c of ctrls) P.push({ t: 'poly', pts: [[c.x, yC + cH], [c.x, yJ], [xP, yJ]], stroke: '#111827', sw: 0.3 * k });
       P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111827', sw: 0.3 * k });
       // a processadora: aparelho maior, com a tela azul e os botões

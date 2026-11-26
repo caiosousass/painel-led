@@ -283,7 +283,7 @@ function basesDoProjeto(it) {
   const cfg = it.cfg;
   const racks = it.pl ? it.pl.energia.racks.length : (it.reguas ? Math.ceil(it.reguas / (num(cfg.reguas_rack) || 4)) : 0);
   const tipo = RACKS[cfg.rack] ? cfg.rack : 'rack-9';
-  const ctrl = id => (it.ctrl.item === id ? it.ctrl.qtd : 0);
+  const ctrl = id => (it.ctrls ? it.ctrls[id] || 0 : it.ctrl.item === id ? it.ctrl.qtd : 0);   // as controladoras contadas nesta tela
   return {
     portas: it.portas, cabos_dados: it.cabos_dados, circuitos_projeto: it.circuitos, reguas: it.reguas, racks,
     racks_5: tipo === 'rack-5' ? racks : 0, racks_9: tipo === 'rack-9' ? racks : 0, racks_12: tipo === 'rack-12' ? racks : 0,

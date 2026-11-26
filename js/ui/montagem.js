@@ -9,13 +9,16 @@
  * 3 · Energia: os circuitos de powercon (cores), as réguas Steck/Powercon e os racks da sala desenhados embaixo.
  *     Toque num circuito para escolher a régua dele, numa régua para escolher o rack, num rack para o tipo.
  *     O sistema sugere; na primeira mudança a sugestão vira a montagem da sala (lista.projeto.energia).
+ * 4 · Processamento: cada porta numa saída de controladora (MCTRL660, Taurus) e as controladoras na
+ *     processadora. Toque numa porta para escolher a controladora e a saída, numa controladora para o tipo.
+ *     Também vira montagem da sala na primeira mudança (lista.projeto.processamento).
  * Cada mudança grava a sala: o desenho, o PDF e a lista (cabos, réguas, racks, controladoras) acompanham.
  * O desenho usa METROS como unidade (viewBox): x da esquerda da sala; o chão é y = 0 e para cima é negativo.
  */
 import * as Cab from '../cabeamento.js';
 
 // o que o editor lembra entre um redesenho da página e outro
-export const est = { modo: 'paineis', sel: null, mao: false, desfazer: [], zoom: 1, selE: null };
+export const est = { modo: 'paineis', sel: null, mao: false, desfazer: [], zoom: 1, selE: null, selP: null };
 const ZOOMS = [1, 1.5, 2, 3, 4, 6];
 
 const PADROES = [['inf-esq', 'vertical'], ['sup-esq', 'vertical'], ['inf-dir', 'vertical'], ['sup-dir', 'vertical'],
@@ -43,7 +46,7 @@ function limites(its, modo) {
   const rot = o => ((o.t.nome || 'Tela') + ' · ' + n2(o.w) + ' × ' + n2(o.h) + ' m').length * u * 2.6 * 0.58 / 2 + u * 2;
   const x0 = Math.min(minX - mx, ...its.map(o => o.x + o.w / 2 - rot(o)));
   const x1 = Math.max(maxX + mx, ...its.map(o => o.x + o.w / 2 + rot(o)));
-  return { x0, x1, yT: -(maxTop + Math.max(0.9, u * 9)), yB: modo === 'energia' ? Math.max(3.2, u * 29) : Math.max(0.7, u * 7), u };
+  return { x0, x1, yT: -(maxTop + Math.max(0.9, u * 9)), yB: modo === 'energia' || modo === 'processamento' ? Math.max(3.2, u * 30) : Math.max(0.7, u * 7), u };
 }
 
 /* ícone de um padrão: 3 × 3 gabinetes com o caminho do cabo, como na NovaStar */
@@ -77,7 +80,7 @@ function svgSala(its, modo, temp, fixo, ps) {
       out.push(`<rect x="${o.x - u * 2}" y="${-o.base}" width="${o.w + u * 4}" height="${o.base}" fill="#cbd5e1"/>`);
       out.push(`<text x="${o.x + o.w / 2}" y="${-o.base / 2 + u}" font-size="${Math.min(u * 2.2, o.base * 0.6)}" text-anchor="middle" fill="#475569">palco ${n2(o.base)} m</text>`);
     }
-    const sinal = modo === 'sinal', energia = modo === 'energia', colorido = sinal || energia;
+    const sinal = modo === 'sinal' || modo === 'processamento', energia = modo === 'energia', colorido = sinal || energia;
     const cor = new Map();
     (sinal ? pl.dados.portas : energia ? pl.energia.circuitos : []).forEach((p, i) => p.caminho.forEach(([c, r]) => cor.set(c + ',' + r, i)));
     for (let c = 0; c < pl.colunas; c++) for (let r = 0; r < pl.linhas; r++) {
@@ -105,7 +108,8 @@ function svgSala(its, modo, temp, fixo, ps) {
       const X = c => o.x + (c + 0.5) * cw, Y = r => y0 + (r + 0.5) * ch, tr = m * 0.12;
       for (const p of pl.dados.portas) {
         const pts = p.caminho.map(([c, r]) => [X(c), Y(r)]);
-        out.push(`<polyline points="${pts.map(q => q.join(',')).join(' ')}" fill="none" stroke="#1e3a8a" stroke-width="${m * 0.05}" stroke-linejoin="round"/>`);
+        const marcada = modo === 'processamento' && est.selP && est.selP.tipo === 'porta' && est.selP.chave === Cab.chaveCircuito(o.it, p.n);
+        out.push(`<polyline points="${pts.map(q => q.join(',')).join(' ')}" fill="none" stroke="${marcada ? '#0ea5e9' : '#1e3a8a'}" stroke-width="${m * (marcada ? 0.14 : 0.05)}" stroke-linejoin="round"/>`);
         for (let k = 1; k < pts.length; k++) {
           const [ax, ay] = pts[k - 1], [bx, by] = pts[k], mx = (ax + bx) / 2, my = (ay + by) / 2, a = Math.atan2(by - ay, bx - ax);
           out.push(`<polygon points="${[0, 2.5, -2.5].map(d => `${mx + Math.cos(a + d) * tr},${my + Math.sin(a + d) * tr}`).join(' ')}" fill="#1e3a8a"/>`);
@@ -120,6 +124,7 @@ function svgSala(its, modo, temp, fixo, ps) {
     out.push('</g>');
   }
   if (modo === 'energia' && ps) out.push(energiaSvg(its, ps, L));
+  if (modo === 'processamento' && ps) out.push(processamentoSvg(its, ps, L));
   const vw = L.x1 - L.x0, vh = L.yB - L.yT;
   return `<svg class="mt-svg ${modo === 'sinal' && est.mao ? 'pintando' : modo === 'paineis' ? 'paineis' : ''}" style="width:${est.zoom * 100}%;aspect-ratio:${vw.toFixed(3)} / ${vh.toFixed(3)}" viewBox="${L.x0} ${L.yT} ${vw} ${vh}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Montagem da sala">${out.join('')}</svg>`;
 }
@@ -159,6 +164,38 @@ function energiaSvg(its, ps, L) {
       + `<text x="${x}" y="${yK + hK * 0.45}" font-size="${u * 2.4}" font-weight="700" text-anchor="middle" fill="#ffffff">Rack ${k.n}</text>`
       + `<text x="${x}" y="${yK + hK * 0.8}" font-size="${u * 1.9}" text-anchor="middle" fill="#cbd5e1">${saidasK} saídas · ${k.reguas.length} régua${k.reguas.length === 1 ? '' : 's'}</text></g>`);
   }
+  return out.join('');
+}
+/* embaixo do chão: as controladoras (cada porta ligada na sua) e a processadora */
+function processamentoSvg(its, ps, L) {
+  const u = L.u, out = [];
+  const daTela = new Map(its.map(o => [o.it, o]));
+  const yC = u * 9.5, hC = u * 4.6, wC = u * 15, yP = u * 21, hP = u * 6.4, wP = u * 20;
+  const lista = ps.processamento.ctrls;
+  const pos = lista.map(c => {
+    const sa = c.saidas.map(p => {
+      const o = p && daTela.get(ps.telas[p.ti]), pt = o && o.pl.dados.portas[p.n - 1];
+      return pt ? [o.x + (pt.caminho[0][0] + 0.5) * (o.w / o.pl.colunas), -o.base] : null;
+    }).filter(Boolean);
+    return { c, sa, x: sa.length ? (Math.min(...sa.map(q => q[0])) + Math.max(...sa.map(q => q[0]))) / 2 : (L.x0 + L.x1) / 2 };
+  }).sort((a, b) => a.x - b.x);
+  for (let i = 1; i < pos.length; i++) if (pos[i].x - pos[i - 1].x < wC * 1.15) pos[i].x = pos[i - 1].x + wC * 1.15;
+  const sobra = pos.length ? pos[pos.length - 1].x + wC / 2 - L.x1 : 0;
+  if (sobra > 0) pos.forEach(q => { q.x -= sobra; });
+  const xP = pos.length ? (pos[0].x + pos[pos.length - 1].x) / 2 : (L.x0 + L.x1) / 2;
+  for (const { c, sa, x } of pos) {
+    const C = Cab.CONTROLADORAS[c.tipo], marcada = est.selP && est.selP.tipo === 'ctrl' && est.selP.id === c.id;
+    const passa = c.px > C.px || c.usadas > C.portas;
+    for (const [sx, sy] of sa) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yC}" stroke="${marcada ? '#0ea5e9' : '#475569'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
+    out.push(`<line x1="${x}" y1="${yC + hC}" x2="${xP}" y2="${yP}" stroke="#1f2937" stroke-width="${u * 0.3}"/>`);
+    out.push(`<g data-ctrl="${esc(c.id)}" style="cursor:pointer"><rect x="${x - wC / 2}" y="${yC}" width="${wC}" height="${hC}" rx="${u * 0.6}" fill="#1f2937" stroke="${marcada ? '#0ea5e9' : passa ? '#dc2626' : '#0b0f17'}" stroke-width="${u * (marcada || passa ? 0.7 : 0.25)}"/>`
+      + `<text x="${x}" y="${yC + hC * 0.48}" font-size="${u * 2.1}" font-weight="700" text-anchor="middle" fill="#ffffff">${esc(C.nome)} ${c.n}</text>`
+      + `<text x="${x}" y="${yC + hC * 0.85}" font-size="${u * 1.45}" text-anchor="middle" fill="${passa ? '#fca5a5' : '#93c5fd'}">${c.usadas}/${C.portas} saídas · ${n2(c.px / 1e6)} Mpx</text></g>`);
+  }
+  const marcadaP = est.selP && est.selP.tipo === 'proc';
+  out.push(`<g data-proc="1" style="cursor:pointer"><rect x="${xP - wP / 2}" y="${yP}" width="${wP}" height="${hP}" rx="${u * 0.9}" fill="#374151" stroke="${marcadaP ? '#0ea5e9' : '#111827'}" stroke-width="${u * (marcadaP ? 0.7 : 0.3)}"/>`
+    + `<rect x="${xP - wP * 0.36}" y="${yP + hP * 0.2}" width="${wP * 0.34}" height="${hP * 0.55}" fill="#60a5fa"/>`
+    + `<text x="${xP + wP * 0.2}" y="${yP + hP * 0.6}" font-size="${u * 2.1}" font-weight="700" text-anchor="middle" fill="#ffffff">${esc(ps.cfg.processadora || 'Processadora')}</text></g>`);
   return out.join('');
 }
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -207,8 +244,49 @@ function energiaHtml(ctx, ps, pode) {
   return resumo + corpo + (voltar ? `<div style="margin-top:10px">${voltar}</div>` : '');
 }
 
+/* Processamento: a porta escolhida (controladora e saída), a controladora (tipo e saídas) e a processadora */
+function processamentoHtml(ctx, ps, pode) {
+  const { B } = ctx;
+  const ro = pode ? '' : 'disabled';
+  const lista = ps.processamento.ctrls;
+  const nomeTela = ti => (ps.telas[ti] && ps.telas[ti].nome) || 'Tela';
+  const tot = Object.entries(ps.controladoras).map(([t, q]) => q + ' × ' + Cab.CONTROLADORAS[t].nome).join(' + ') || 'nenhuma';
+  const resumo = `<p class="peq mut2" style="margin:0 0 8px">${ps.portas} porta${ps.portas === 1 ? '' : 's'} · ${tot}${ps.processamento.manual ? ' · <b>montagem sua</b>' : ' · sugestão do sistema'}</p>`;
+  const procIn = `<label class="campo" style="max-width:320px"><span>Processadora</span><input data-p="processadora" value="${B.esc(ps.cfg.processadora || '')}" placeholder="Ex.: VX1000" ${ro}></label>`;
+  const opCtrls = atual => lista.map(c => `<option value="${B.esc(c.id)}" ${c.id === atual ? 'selected' : ''}>${Cab.CONTROLADORAS[c.tipo].nome} ${c.n} · ${c.usadas}/${Cab.CONTROLADORAS[c.tipo].portas}</option>`).join('')
+    + Object.entries(Cab.CONTROLADORAS).map(([t, C]) => `<option value="__nova:${t}">+ Nova ${C.nome}</option>`).join('');
+  const sel = est.selP;
+  let corpo = '<p class="dica" style="margin:0">Toque numa porta (na tela) para escolher a controladora e a saída, numa controladora para o tipo, ou na processadora.</p>';
+  if (sel && sel.tipo === 'porta') {
+    const c = lista.find(q => q.saidas.some(p => p && p.chave === sel.chave));
+    const k = c ? c.saidas.findIndex(p => p && p.chave === sel.chave) : -1;
+    const p = ps.processamento.portas.find(q => q.chave === sel.chave);
+    if (p) {
+      const cap = c ? Cab.CONTROLADORAS[c.tipo].portas : 0;
+      const opS = c ? Array.from({ length: cap }, (_, i) => { const q = c.saidas[i]; return `<option value="${i + 1}" ${i === k ? 'selected' : ''}>Saída ${i + 1}${q && q.chave !== sel.chave ? ' — ocupada: ' + B.esc(nomeTela(q.ti)) + ' P' + q.n : ''}</option>`; }).join('') : '';
+      corpo = `<div class="grade g3 m1"><div><b>Porta P${p.n}</b> — ${B.esc(nomeTela(p.ti))}<div class="peq mut2">${fmt(p.px)} px</div></div>
+        <label class="campo"><span>Controladora</span><select data-pp="ctrl" ${ro}>${opCtrls(c && c.id)}</select></label>
+        ${c ? `<label class="campo"><span>Saída</span><select data-pp="saida" ${ro}>${opS}</select></label>` : ''}</div>`;
+    }
+  } else if (sel && sel.tipo === 'ctrl') {
+    const c = lista.find(q => q.id === sel.id);
+    if (c) {
+      const C = Cab.CONTROLADORAS[c.tipo], pct = Math.round(c.px / C.px * 100), passa = c.px > C.px || c.usadas > C.portas;
+      corpo = `<div class="grade g2 m1"><div><b>${C.nome} ${c.n}</b> <span class="${passa ? 'vermelho' : 'mut2'}">· ${c.usadas} de ${C.portas} saídas · ${fmt(c.px)} de ${fmt(C.px)} px (${pct}%)${passa ? ' — passa da capacidade' : ''}</span>
+          <div class="peq mut2">${c.saidas.map((p, i) => p ? `Saída ${i + 1}: ${B.esc(nomeTela(p.ti))} P${p.n}` : null).filter(Boolean).join(' · ') || 'sem porta ainda'}</div></div>
+        <label class="campo"><span>Tipo</span><select data-pp="tipo" ${ro}>${Object.entries(Cab.CONTROLADORAS).map(([t, X]) => `<option value="${t}" ${t === c.tipo ? 'selected' : ''}>${X.nome} (${X.portas} saídas)</option>`).join('')}</select></label></div>
+        ${pode ? '<button class="btn sm mt-p-tirar" style="margin-top:8px">Tirar a controladora</button>' : ''}`;
+    }
+  } else if (sel && sel.tipo === 'proc') {
+    corpo = `<p class="peq" style="margin:0 0 6px">${lista.length} controladora${lista.length === 1 ? '' : 's'} ligada${lista.length === 1 ? '' : 's'} na processadora.</p>`;
+  }
+  const voltar = ps.processamento.manual && pode ? '<div style="margin-top:10px"><button class="btn sm mt-p-auto">Voltar ao automático</button></div>' : '';
+  return resumo + corpo + `<div style="margin-top:10px">${procIn}</div>` + voltar;
+}
+
 function ladoHtml(ctx, its, ps, pode) {
   if (est.modo === 'energia') return energiaHtml(ctx, ps, pode);
+  if (est.modo === 'processamento') return processamentoHtml(ctx, ps, pode);
   const { B } = ctx;
   const o = its.find(x => x.t.id === est.sel);
   const ro = pode ? '' : 'disabled';
@@ -276,7 +354,7 @@ export function htmlMontagem(ctx, lista, ps, pode) {
   return `<div class="card mt-card">
     <div class="linha-flex" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <h2 style="margin:0" class="cresce">Montagem da sala</h2>
-      <div class="abas mt-modos"><button data-mm="paineis" class="${est.modo === 'paineis' ? 'on' : ''}">1 · Painéis</button><button data-mm="sinal" class="${est.modo === 'sinal' ? 'on' : ''}">2 · Sinal</button><button data-mm="energia" class="${est.modo === 'energia' ? 'on' : ''}">3 · Energia</button></div>
+      <div class="abas mt-modos"><button data-mm="paineis" class="${est.modo === 'paineis' ? 'on' : ''}">1 · Painéis</button><button data-mm="sinal" class="${est.modo === 'sinal' ? 'on' : ''}">2 · Sinal</button><button data-mm="energia" class="${est.modo === 'energia' ? 'on' : ''}">3 · Energia</button><button data-mm="processamento" class="${est.modo === 'processamento' ? 'on' : ''}">4 · Processamento</button></div>
       <div class="linha-flex mt-zoom" style="gap:4px"><button class="btn sm" data-z="-1" title="Afastar">−</button><span class="peq mut2" style="min-width:42px;text-align:center">${Math.round(est.zoom * 100)}%</span><button class="btn sm" data-z="1" title="Aproximar">+</button></div>
       ${pode && est.modo === 'paineis' ? `<button class="btn sm mt-add">${ctx.B.ico('add')} Tela</button>` : ''}
     </div>
@@ -322,6 +400,17 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
     }
     s.addEventListener('pointerdown', e => {
       const p = ponto(e), o = telaEm(p);
+      if (est.modo === 'processamento') {
+        const gc = e.target.closest && e.target.closest('[data-ctrl]'), gp = e.target.closest && e.target.closest('[data-proc]');
+        if (gc) est.selP = { tipo: 'ctrl', id: gc.dataset.ctrl };
+        else if (gp) est.selP = { tipo: 'proc' };
+        else if (o) {
+          const cel = celulaEm(o, p), pt = cel && o.pl.dados.portas.find(q => q.caminho.some(z => z[0] === cel[0] && z[1] === cel[1]));
+          if (pt) { est.selP = { tipo: 'porta', chave: Cab.chaveCircuito(o.it, pt.n) }; est.sel = o.t.id; }
+        } else return;
+        ctx.atualizar();
+        return;
+      }
       if (est.modo === 'energia') {
         const gr = e.target.closest && e.target.closest('[data-regua]'), gk = e.target.closest && e.target.closest('[data-rack]');
         if (gr) est.selE = { tipo: 'regua', id: gr.dataset.regua };
@@ -495,6 +584,59 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
   };
   const eAuto = card.querySelector('.mt-e-auto');
   if (eAuto) eAuto.onclick = () => { est.selE = null; salvar({ projeto: Object.assign({}, lista.projeto || {}, { energia: null }) }, { recalc: true }); };
+
+  // ---------- Processamento ----------
+  const montagemDoProcessamento = () => {
+    const ids = new Map(), novo = id => { if (!ids.has(id)) ids.set(id, /^auto-/.test(id) ? ctx.novoId() : id); return ids.get(id); };
+    const ctrls = ps.processamento.ctrls.map(c => ({ id: novo(c.id), tipo: c.tipo }));
+    const ligacoes = {};
+    ps.processamento.ctrls.forEach(c => c.saidas.forEach((p, i) => { if (p && !p.estimada) ligacoes[p.chave] = { ctrl: novo(c.id), saida: i + 1 }; }));
+    return { pr: { ctrls, ligacoes }, novo };
+  };
+  const gravaProc = (pr, sel) => { if (sel !== undefined) est.selP = sel; salvar({ projeto: Object.assign({}, lista.projeto || {}, { processamento: pr }) }, { recalc: true }); };
+  const livreEm = (pr, ctrlId, cap, menos) => { for (let i = 1; i <= cap; i++) if (!Object.entries(pr.ligacoes).some(([k, l]) => k !== menos && l.ctrl === ctrlId && l.saida === i)) return i; return null; };
+  const sP = est.selP;
+  card.querySelectorAll('[data-pp]').forEach(inp => inp.addEventListener('change', () => {
+    const { pr, novo } = montagemDoProcessamento();
+    const qual = inp.dataset.pp, v = inp.value;
+    if (qual === 'ctrl' && sP) {
+      let id;
+      if (v.startsWith('__nova:')) { id = ctx.novoId(); pr.ctrls.push({ id, tipo: v.slice(7) }); }
+      else id = novo(v);
+      const c = pr.ctrls.find(q => q.id === id), cap = Cab.CONTROLADORAS[c.tipo].portas;
+      const saida = livreEm(pr, id, cap, sP.chave);
+      if (saida == null) { B.toast('Essa controladora está com as saídas cheias.'); return ctx.atualizar(); }
+      pr.ligacoes[sP.chave] = { ctrl: id, saida };
+      return gravaProc(pr);
+    }
+    if (qual === 'saida' && sP) {
+      const atual = pr.ligacoes[sP.chave];
+      if (!atual) return;
+      const nova = +v, outra = Object.keys(pr.ligacoes).find(k => k !== sP.chave && pr.ligacoes[k].ctrl === atual.ctrl && pr.ligacoes[k].saida === nova);
+      if (outra) pr.ligacoes[outra] = { ctrl: atual.ctrl, saida: atual.saida };   // troca de lugar com a que estava lá
+      pr.ligacoes[sP.chave] = { ctrl: atual.ctrl, saida: nova };
+      return gravaProc(pr);
+    }
+    if (qual === 'tipo' && sP) {
+      const id = novo(sP.id), c = pr.ctrls.find(q => q.id === id);
+      if (!c) return;
+      c.tipo = v;
+      const cap = Cab.CONTROLADORAS[v].portas;
+      for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === id && l.saida > cap) delete pr.ligacoes[k];   // não cabe: vai para a automática
+      return gravaProc(pr, { tipo: 'ctrl', id });
+    }
+  }));
+  const procIn = card.querySelector('[data-p="processadora"]');
+  if (procIn) procIn.addEventListener('change', () => salvar({ projeto: Object.assign({}, lista.projeto || {}, { processadora: procIn.value.trim() }) }, { recalc: false }));
+  const tiraC = card.querySelector('.mt-p-tirar');
+  if (tiraC && sP) tiraC.onclick = () => {
+    const { pr, novo } = montagemDoProcessamento(), id = novo(sP.id);
+    pr.ctrls = pr.ctrls.filter(c => c.id !== id);
+    for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === id) delete pr.ligacoes[k];
+    gravaProc(pr, null);
+  };
+  const pAuto = card.querySelector('.mt-p-auto');
+  if (pAuto) pAuto.onclick = () => { est.selP = null; salvar({ projeto: Object.assign({}, lista.projeto || {}, { processamento: null }) }, { recalc: true }); };
 
   // ---------- Sinal ----------
   const muda = (campos) => { const t = telaDe(o.t.id); t.projeto = Object.assign({}, t.projeto || {}, campos); salvarTelas({ recalc: true }); };
