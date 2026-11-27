@@ -14,6 +14,10 @@ Dois cliques em **`Abrir Painel de LED.bat`** (na pasta `pixel-map`) → abre em
 
 Fundo **escuro, claro ou automático** (igual ao aparelho): botão de sol/lua no topo ou em Ajustes → Aparência; vale por aparelho.
 
+**Versão à vista** (igual ao Calculator): "Painel de LED · v32" no rodapé do menu (no celular, em *Mais*). O número
+sai do `sw.js` (`painel-led-v32`) — suba ele a cada publicação. Quando sai versão nova com o app aberto, aparece
+**Atualizar para vNN** no topo; abrir o app de novo já traz a nova (sem Ctrl+F5).
+
 Sem configurar nada roda em **modo local**: os dados ficam só naquele aparelho. Serve para testar. Para a
 equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo online (abaixo).
 
@@ -206,4 +210,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 71 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 72 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

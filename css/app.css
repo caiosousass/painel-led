@@ -56,6 +56,10 @@ a{color:var(--acc2)}
 .topo .tit{font-weight:800;font-size:15px;font-family:'Montserrat',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sync{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);font-weight:600;white-space:nowrap;background:none;border:0;cursor:pointer;padding:4px}
 .sync i{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.atualizar-app{display:flex;align-items:center;gap:6px;font:inherit;font-size:12px;font-weight:700;color:#fff;background:var(--acc);border:0;border-radius:999px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.atualizar-app .ico,.atualizar-app svg{width:14px;height:14px}
+.versao-mais{margin:12px 0 0;text-align:center;font-size:12px;color:var(--mut2)}
+.versao-mais:empty{display:none}
 .sync.local i{background:var(--acc2)} .sync.off i{background:var(--warn)} .sync.erro i{background:var(--danger)}
 main{flex:1;width:100%;max-width:1100px;margin:0 auto;padding:16px 16px calc(var(--nav-h) + var(--safe-b) + 90px)}
 .navbaixo{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;background:var(--vidro2);backdrop-filter:blur(10px);
@@ -92,6 +96,9 @@ main{flex:1;width:100%;max-width:1100px;margin:0 auto;padding:16px 16px calc(var
   .lateral .badge{position:static;margin-left:auto}
   .lateral .rodape{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--mut2)}
   .lateral .rodape .quem{padding:0 10px 8px;color:var(--mut)}
+  .lateral .rodape .versao{padding:0 10px 6px;font-size:11px;color:var(--mut2)}
+  .lateral .rodape .versao:empty{display:none}
+  body.menu-recolhido .lateral .versao{display:none}
   .navbaixo{display:none}
   .topo .logo{display:none}
   main{padding:22px 26px 120px}

@@ -301,11 +301,13 @@ function montarCasca() {
       <div class="sub">Painel de LED</div>
       ${navVisivel().map(([r, t, i]) => `<button data-r="${r}" title="${t}">${ico(i)}<span class="rot">${t}</span><span class="badge" data-badge="${r}" hidden></span></button>`).join('')}
       <div class="rodape"><div class="quem">${esc(quem)}${D.usuario && D.usuario.papel ? ' · ' + (D.usuario.papel === 'supervisor' ? 'supervisor' : 'técnico') : ''}</div>
+        <div class="versao" data-versao>${esc(textoVersao())}</div>
         <button class="recolher" title="Recolher menu" aria-label="Recolher ou abrir o menu">${ico('back')}</button></div>
     </nav>
     <div class="conteudo">
       <header class="topo"><img class="logo" src="logo-mark.png" alt=""><span class="tit">Painel de LED</span>
         <button class="sync" title="Sincronização"><i></i><span></span></button>
+        <button class="atualizar-app" title="Saiu uma versão nova: toque para carregar" ${VERSAO.nova ? '' : 'hidden'}>${ico('refresh')}<span>${esc(textoAtualizar())}</span></button>
         <button class="tema-btn" title="Fundo claro / escuro" aria-label="Trocar fundo claro ou escuro"></button></header>
       <main id="principal"></main>
     </div>
@@ -339,7 +341,8 @@ function montarCasca() {
 async function menuMais() {
   const v = await B.modal({
     titulo: 'Mais',
-    corpo: `<div class="lista-escolha">${navVisivel().filter(n => !navBaixo().includes(n[0])).map(([r, t, i]) => `<button class="escolha" data-r="${r}"><b>${t}</b></button>`).join('')}</div>`,
+    corpo: `<div class="lista-escolha">${navVisivel().filter(n => !navBaixo().includes(n[0])).map(([r, t, i]) => `<button class="escolha" data-r="${r}"><b>${t}</b></button>`).join('')}</div>
+      <p class="versao-mais" data-versao>${esc(textoVersao())}</p>`,
     botoes: [{ txt: 'Fechar', valor: null }],
     aoAbrir: (el, fechar) => el.querySelectorAll('[data-r]').forEach(b => { b.onclick = () => fechar(b.dataset.r); })
   });
@@ -433,6 +436,7 @@ function renderizar({ manterRolagem } = {}) {
   atualizarBadges();
 }
 
+const VERSAO = { atual: '', nova: '' };   // a versão à vista (lá embaixo)
 window.addEventListener('unhandledrejection', ev => {
   if (ev.reason && ev.reason.semPermissao) { ev.preventDefault(); B.toast(ev.reason.message, { tipo: 'erro' }); }
 });
@@ -442,6 +446,41 @@ iniciar().catch(e => {
   raiz.innerHTML = `<div class="login"><div class="caixa card"><h1>Não foi possível abrir</h1><p class="muted">${esc(e.message)}</p></div></div>`;
 });
 
+/* Versão à vista (igual ao Calculator): sai do próprio sw.js ("painel-led-v32"), então não tem um segundo
+ * lugar para esquecer de mudar. Fica no rodapé do menu (no celular, em "Mais"). Quando sai uma versão nova
+ * enquanto o app está aberto, aparece "Atualizar" no topo. */
+function textoVersao() { return VERSAO.atual ? 'Painel de LED · ' + VERSAO.atual : ''; }
+function textoAtualizar() { return VERSAO.nova && VERSAO.nova !== VERSAO.atual ? 'Atualizar para ' + VERSAO.nova : 'Atualizar'; }
+async function lerVersao() {
+  try { const m = /painel-led-(v\d+)/.exec(await (await fetch('sw.js', { cache: 'no-store' })).text()); return m ? m[1] : ''; } catch (e) { return ''; }
+}
+function mostrarVersao() {
+  document.querySelectorAll('[data-versao]').forEach(e => { e.textContent = textoVersao(); });
+  document.querySelectorAll('.atualizar-app').forEach(b => {
+    b.hidden = !VERSAO.nova;
+    b.querySelector('span').textContent = textoAtualizar();
+    b.onclick = () => location.reload();
+  });
+}
+// a versão que está RODANDO: a do cache do service worker que abriu a página (na primeira visita, a do servidor)
+async function versaoRodando() {
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller && window.caches) {
+      const vs = (await caches.keys()).map(k => /^painel-led-(v\d+)$/.exec(k)).filter(Boolean).map(m => m[1]).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
+      if (vs.length) return vs[vs.length - 1];   // logo depois de atualizar, o cache velho ainda pode estar saindo
+    }
+  } catch (e) { /* sem cache: vale a do servidor */ }
+  return lerVersao();
+}
+if (location.protocol !== 'file:') versaoRodando().then(v => { VERSAO.atual = v; mostrarVersao(); });
+
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const avisa = async () => { VERSAO.nova = (await lerVersao()) || 'nova'; mostrarVersao(); };
+    reg.addEventListener('updatefound', () => {
+      const novo = reg.installing;
+      if (novo) novo.addEventListener('statechange', () => { if (novo.state === 'installed' && navigator.serviceWorker.controller) avisa(); });
+    });
+    setInterval(() => reg.update().catch(() => {}), 60000);   // procura versão nova de minuto em minuto
+  }).catch(() => {});
 }
