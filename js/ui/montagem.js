@@ -362,6 +362,7 @@ export function htmlMontagem(ctx, lista, ps, pode) {
     <div class="linha-flex" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <h2 style="margin:0" class="cresce">Montagem da sala</h2>
       <div class="abas mt-modos"><button data-mm="paineis" class="${est.modo === 'paineis' ? 'on' : ''}">1 · Painéis</button><button data-mm="sinal" class="${est.modo === 'sinal' ? 'on' : ''}">2 · Sinal</button><button data-mm="energia" class="${est.modo === 'energia' ? 'on' : ''}">3 · Energia</button><button data-mm="processamento" class="${est.modo === 'processamento' ? 'on' : ''}">4 · Processamento</button></div>
+      ${(() => { const on = typeof document !== 'undefined' && document.body.classList.contains('cheio-mt'); return `<button class="btn sm tela-cheia-btn" data-cheio="mt" title="${on ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}">${ctx.B.ico(on ? 'cheia_sair' : 'cheia')} ${on ? 'Sair' : 'Tela cheia'}</button>`; })()}
       <div class="linha-flex mt-zoom" style="gap:4px"><button class="btn sm" data-z="-1" title="Afastar">−</button><span class="peq mut2" style="min-width:42px;text-align:center">${Math.round(est.zoom * 100)}%</span><button class="btn sm" data-z="1" title="Aproximar">+</button></div>
       ${pode && est.modo === 'paineis' ? `<button class="btn sm mt-add">${ctx.B.ico('add')} Tela</button>` : ''}
     </div>

@@ -474,6 +474,21 @@ input[type=search]{background:var(--campo);border:1px solid var(--line);border-r
 .pj-sel-t{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .pj-sel-t .mut2{flex:1}
 .pj-sel-b{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}
+/* tela cheia: o editor da montagem ou a prancha ocupam a tela toda (acima do menu; abaixo das janelas e avisos) */
+body.cheio-mt,body.cheio-pj{overflow:hidden}
+body.cheio-mt .mt-card,body.cheio-pj .pj-folhas{position:fixed;inset:0;z-index:80;margin:0;border-radius:0;max-width:none;overflow:auto;padding:12px 16px calc(12px + var(--safe-b));padding-top:calc(var(--safe-t) + 12px)}
+body.cheio-pj .pj-folhas{display:flex;flex-direction:column}
+body.cheio-pj .pj-folhas>h2{flex:none}
+body.cheio-pj .pj-folhas .pj-folha{flex:1 1 auto;min-height:260px;display:flex;align-items:center;justify-content:center}
+body.cheio-pj .pj-folhas .pj-folha svg{height:100%;width:auto;max-width:100%}
+body.cheio-mt .mt-quadro{max-height:calc(100vh - 150px)}
+@media (min-width:1000px){
+  body.cheio-mt .mt-card{display:grid;grid-template-columns:minmax(0,1fr) 380px;grid-template-rows:auto minmax(0,1fr);gap:0 14px}
+  body.cheio-mt .mt-card>:first-child{grid-column:1/-1}
+  body.cheio-mt .mt-quadro{max-height:none;height:100%}
+  body.cheio-mt .mt-lado{margin-top:0;overflow:auto}
+}
+.tela-cheia-btn .ico{width:15px;height:15px}
 .pj-arraste .ico{width:15px;height:15px}
 .pj-resumo{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--mut);margin-top:10px}
 .pj-resumo b{color:var(--txt)}

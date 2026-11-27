@@ -86,6 +86,34 @@ const historico = new Map();    // lista → { antes: [estado…], depois: [esta
 const estadoMostrado = new Map(); // lista → o estado que está na tela agora (vira o "antes" da próxima mudança)
 let areaTransf = null;          // o que foi copiado na prancha (aparelho ou tela) — dá para colar em outra sala
 let atalhoPrancha = null;       // { id, voltar, copiar, colar, cortar, apagar, temSel } da prancha aberta
+/* Tela cheia do editor da montagem (mt) ou da prancha (pj): o cartão ocupa a tela toda e o navegador entra em
+ * tela cheia (some a barra do navegador). Esc ou o botão "Sair" voltam. Sair da página do projeto também. */
+function telaCheia(qual) {
+  const cl = document.body.classList, ja = cl.contains('cheio-' + qual);
+  cl.remove('cheio-mt', 'cheio-pj');
+  if (!ja) {
+    cl.add('cheio-' + qual);
+    const raiz = document.documentElement;
+    if (raiz.requestFullscreen && !document.fullscreenElement) raiz.requestFullscreen().catch(() => {});
+  } else if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && /cheio-(mt|pj)/.test(document.body.className)) { document.body.classList.remove('cheio-mt', 'cheio-pj'); window.dispatchEvent(new HashChangeEvent('hashchange')); }
+});
+window.addEventListener('hashchange', () => {
+  if (!/^#\/projeto\//.test(location.hash) && /cheio-(mt|pj)/.test(document.body.className)) {
+    document.body.classList.remove('cheio-mt', 'cheio-pj');
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  }
+});
+document.addEventListener('keydown', e => {
+  // sem a tela cheia do navegador (celular), o Esc também sai
+  if (e.key === 'Escape' && !document.fullscreenElement && /cheio-(mt|pj)/.test(document.body.className) && !document.querySelector('.modal')) {
+    document.body.classList.remove('cheio-mt', 'cheio-pj');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }
+});
+
 const fotoDa = lista => JSON.stringify({ projeto: lista.projeto || {}, telas: lista.telas || [] });
 /* guarda o estado de antes da mudança (toda mudança da tela do projeto passa aqui: campos, editor e prancha) */
 function guardarHistorico(id) {
@@ -473,8 +501,8 @@ export function render(ctx, [id]) {
 
   ${htmlMontagem(ctx, lista, ps, pode)}
 
-  <div class="card"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
-      <span class="dir">${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
+  <div class="card pj-folhas"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
+      <span class="dir">${folhas.length ? (() => { const on = document.body.classList.contains('cheio-pj'); return `<button class="btn sm tela-cheia-btn" data-cheio="pj" title="${on ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}">${B.ico(on ? 'cheia_sair' : 'cheia')} ${on ? 'Sair' : 'Tela cheia'}</button> `; })() : ''}${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
     ${pode && folhas.length ? (() => {
       const f = folhas[fi], h = historico.get(id) || { antes: [], depois: [] }, pj = lista.projeto || {};
       const temLay = Object.keys((pj.layout || {})[f.tipo] || {}).length, temTxt = Object.keys(pj.textos || {}).length, temLig = !!(pj.processamento && pj.processamento.ctrls);
@@ -528,6 +556,7 @@ export function ligar(el, ctx, [id]) {
   const lista = ctx.lista(id);
   if (!lista) return;
   estadoMostrado.set(id, fotoDa(lista));
+  el.querySelectorAll('.tela-cheia-btn').forEach(b => { b.onclick = () => { telaCheia(b.dataset.cheio); ctx.atualizar(); }; });
   el.querySelectorAll('.ir-lista').forEach(b => { b.onclick = () => ctx.ir('lista/' + id); });
   el.querySelector('.exportar').onclick = async () => {
     try {

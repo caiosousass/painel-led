@@ -151,6 +151,8 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
   - **atalhos** com algo selecionado na prancha (toque numa tela, aparelho ou porta): **Ctrl+C / Ctrl+V** copia e
     cola (tela duplicada, ou outro aparelho igual — dá para colar em outra sala), **Ctrl+X** recorta, **Delete**
     tira (porta: desliga), **Esc** solta a seleção. Nos campos de texto, os atalhos são os normais.
+  - **Tela cheia**: botão no editor da *Montagem da sala* e nas *Folhas do PDF* — o cartão ocupa a tela toda (na
+    Montagem, desenho à esquerda e dados à direita). *Sair* ou **Esc** voltam.
   Um CVT4K-S para várias telas: ponha o CVT4K-S e arraste para ele as portas (ou *Toda a tela aqui*) de cada tela.
 
 O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.
