@@ -820,10 +820,12 @@ export function desenhaProcessadoraH(P, mod, cx, y, w) {
 function salaTecnica(P, ps, area, modo, k) {
   const its = ps.telas.map((it, ti) => ({ it, ti })).filter(o => o.it.pl);
   if (!its.length) return 0;
-  const comAC = modo !== 'sinal', comSinal = modo === 'sinal';
+  // folha única ("AC e Sinal", sala pequena): os dois desenhos embaixo do painel — o rack na metade da
+  // esquerda e a controladora → processadora na da direita
+  const comAC = modo !== 'sinal', comSinal = modo !== 'ac', juntas = modo === 'ambos';
   // processadora alta (H9, H15) ganha mais espaço embaixo das telas
   const mProc = comSinal ? modeloProcessadora(ps.cfg.processadora) : null, alta = mProc && PROCESSADORAS[mProc].alt > 0.6 ? 12 * k : 0;
-  const hBaixo = Math.min(area.h * (alta ? 0.54 : 0.46), (modo === 'ambos' ? 44 : 58) * k + alta);
+  const hBaixo = Math.min(area.h * (alta ? 0.54 : 0.46), 58 * k + alta);
   const pos = posicoesDaSala(ps);
   const x0m = Math.min(...its.map(o => pos.get(o.it)));
   const x1m = Math.max(...its.map(o => pos.get(o.it) + o.it.pl.largura_m));
@@ -845,16 +847,18 @@ function salaTecnica(P, ps, area, modo, k) {
     gradeTecnica(P, g, modo, ondeLiga);
     if (geo.length > 1) P.push({ t: 'text', x: g.xm, y: g.y0 - 1.6 * k, txt: corta(`${g.it.nome || 'Tela'} · ${n2t(g.pl.largura_m)} x ${n2t(g.pl.altura_m)} m`, Math.max(g.w * 1.2, 24 * k), 6.5 * k, true), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
   }
-  const xMin = area.x, xMax = area.x + area.w;
+  const xMin = area.x, xMax = area.x + area.w, xMeio = (xMin + xMax) / 2;
+  const acMin = xMin, acMax = juntas ? xMeio - 4 * k : xMax, siMin = juntas ? xMeio + 4 * k : xMin, siMax = xMax;
+  const yBusAC = yBase + Math.min(8 * k, hBaixo * 0.15), yRack = yBase + hBaixo * 0.42;
   if (comAC) {
     // fino: o powercon de cada circuito descendo do painel até a prolonga Steck; grosso: a prolonga até o rack
     const fino = 0.24 * k, grosso = 0.6 * k, pw = 1.9 * k;
-    const yBus = yBase + Math.min(8 * k, hBaixo * 0.15);
+    const yBus = yBusAC;
     const larg = rk => ((RACKS[rk.tipo] || 9) === 12 ? 1.75 : 1.36);   // rack de 12 é mais largo (4 colunas)
     const propMax = Math.max(1.36, ...ps.racks.map(larg));
     const caber = area.w / Math.max(1, ps.racks.length * 1.6);
     const rackH = Math.min(17 * k, hBaixo * 0.36, caber / propMax), rackW = rackH * propMax;
-    const yR = yBase + hBaixo * 0.42;
+    const yR = yRack;
     // as réguas da sala (uma régua pode juntar circuitos de mais de uma tela)
     const reg = new Map(), geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
     for (const r of ps.reguasSala || []) {
@@ -864,7 +868,7 @@ function salaTecnica(P, ps, area, modo, k) {
         if (!c) continue;
         const col = c.caminho[0][0], cw = g.w / g.pl.colunas, chave = ti + ':' + col, q = repetida.get(chave) || 0;
         repetida.set(chave, q + 1);
-        xs.push((g.cx ? g.cx(col) : g.x0 + (col + 0.5) * cw) - q * Math.min(cw * 0.22, 1.6));
+        xs.push(g.x0 + (col + 0.5) * cw - q * Math.min(cw * 0.22, 1.6));
       }
       if (!xs.length) continue;
       const xm = (Math.min(...xs) + Math.max(...xs)) / 2;
@@ -874,9 +878,9 @@ function salaTecnica(P, ps, area, modo, k) {
     }
     const racks = ps.racks.map(rk => {
       const rs = rk.reguas.map(q => reg.get(q.rg)).filter(Boolean);
-      return Object.assign({}, rk, { rs, x: rs.length ? rs.reduce((a, r) => a + r.xm, 0) / rs.length : (xMin + xMax) / 2 });
+      return Object.assign({}, rk, { rs, x: rs.length ? rs.reduce((a, r) => a + r.xm, 0) / rs.length : (acMin + acMax) / 2 });
     });
-    espalhar(racks, rackW, xMin, xMax);
+    espalhar(racks, rackW, acMin, acMax);
     const yTip = yBus + pw * 1.12;
     for (const rk of racks) {
       const nS = RACKS[rk.tipo] || 9, w = rackH * larg(rk);
@@ -903,10 +907,10 @@ function salaTecnica(P, ps, area, modo, k) {
     }
   }
   if (comSinal) {
-    const yBusS = yBase + Math.min(7 * k, hBaixo * 0.13);
+    const yBusS = juntas ? yBusAC + 4 * k : yBase + Math.min(7 * k, hBaixo * 0.13);
     const lista = (ps.processamento && ps.processamento.ctrls) || [];
-    const cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, lista.length * 1.6)));
-    const yC = yBase + hBaixo * 0.3;
+    const cW = Math.min(30 * k, Math.max(18 * k, (siMax - siMin) / Math.max(1, lista.length * 1.6)));
+    const yC = juntas ? yRack : yBase + hBaixo * 0.3;
     // cada controladora: as portas ligadas nela descem até um barramento e dele até a controladora
     const geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
     const ctrls = lista.map(c => {
@@ -919,13 +923,13 @@ function salaTecnica(P, ps, area, modo, k) {
         xs.push((g.cx ? g.cx(col) : g.x0 + (col + 0.5) * cw) - q * Math.min(cw * 0.22, 1.6));
       }
       const g0 = c.tela != null ? geoDe.get(c.tela) : null;
-      if (!xs.length) return { c, x: g0 ? g0.xm : (xMin + xMax) / 2, xb: null };
+      if (!xs.length) return { c, x: g0 && !juntas ? g0.xm : (siMin + siMax) / 2, xb: null };
       xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBusS, stroke: '#111827', sw: 0.25 * k }));
       const a = Math.min(...xs), b = Math.max(...xs);
       if (xs.length > 1) P.push({ t: 'line', x1: a, y1: yBusS, x2: b, y2: yBusS, stroke: '#111827', sw: 0.25 * k });
       return { c, x: (a + b) / 2, xb: (a + b) / 2 };
     });
-    espalhar(ctrls, cW, xMin, xMax);
+    espalhar(ctrls, cW, siMin, siMax);
     let baixoC = yC;   // onde acabam as controladoras e as legendas delas
     for (const cc of ctrls) {
       const c = cc, ct = cc.c, nome = (CONTROLADORAS[ct.tipo] || {}).nome || 'Controladora';
@@ -952,7 +956,8 @@ function salaTecnica(P, ps, area, modo, k) {
       const mod = modeloProcessadora(proc), alt = mod ? PROCESSADORAS[mod].alt : 13 / 34;
       const yP = baixoC + 5 * k, livre = Math.max(8 * k, yBase + hBaixo - yP - 6 * k);
       const pW = Math.max(12 * k, Math.min(34 * k, livre / alt)), pH = pW * alt;
-      const xP = Math.min(xMax - pW / 2, Math.max(xMin + pW / 2, (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2));
+      const xRef = juntas && ctrls.length ? ctrls.reduce((a, c) => a + c.x, 0) / ctrls.length : (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2;
+      const xP = Math.min(siMax - pW / 2, Math.max(siMin + pW / 2, xRef));
       const yJ = (baixoC + yP) / 2;
       // cada controladora liga pelo lado (o cabo não passa por cima das legendas); a fibra (CVT) é preta e
       // mais grossa, com "fibra" escrito ao lado
@@ -975,13 +980,6 @@ function salaTecnica(P, ps, area, modo, k) {
         P.push({ t: 'text', x: xP, y: yP + pH + 4.6 * k, txt: proc, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
       }
     }
-  }
-  if (modo === 'ambos') {
-    const nomes = [...new Set(geo.map(g => (g.it.ctrl.qtd > 1 ? g.it.ctrl.qtd + ' × ' : '') + ((CONTROLADORAS[g.it.ctrl.item] || {}).nome || '')).filter(Boolean))];
-    const txt = 'Processamento: ' + ([ps.cfg.processadora].concat(nomes).filter(Boolean).join(' + ') || '—');
-    const w = larguraTexto(txt, 6.5 * k, false) + 6 * k;
-    P.push({ t: 'rect', x: area.x, y: area.y + area.h - 7 * k, w, h: 6 * k, fill: '#ffffff', stroke: '#111827', sw: 0.25 * k });
-    P.push({ t: 'text', x: area.x + 3 * k, y: area.y + area.h - 2.9 * k, txt, size: 6.5 * k, color: '#111827' });
   }
   return s;
 }

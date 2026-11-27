@@ -133,8 +133,9 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
   **C** = qual controladora da sala (MCTRL660 1, 2…) · **P** = a saída dessa controladora onde o cabo liga ·
   **RV** = a receptora: a posição do gabinete na corrente (RV-1 é o primeiro) · **A** = ângulo (rotação) ·
   **WH** = largura × altura do gabinete em pixels. Embaixo de cada controladora: "P1–P4: Central cabos 5–8".
-- Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer. Dá para pedir sempre separadas ou
-  sempre juntas em *Energia e processamento da sala*.
+- Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer — embaixo do painel, a prolonga e o
+  rack na metade da esquerda e a controladora → processadora (desenhadas) na da direita. Dá para pedir sempre
+  separadas ou sempre juntas em *Energia e processamento da sala*.
 
 O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.
 
