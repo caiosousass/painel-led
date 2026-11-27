@@ -144,6 +144,11 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
   Local, as faixas azuis e o símbolo no canto. Vem antes das folhas da sala e **não entra na numeração** (no PDF do
   evento, as folhas técnicas seguem numeradas de 1 a N; cada sala com a sua folha de título). Tira em *Energia e
   processamento → Folha de título: Sem*.
+- **Lista no fim do PDF** (para imprimir e mandar pro evento): a lista de material da sala vira folha do projeto, na
+  mesma moldura e carimbo — letra de impressão (nunca menor que 9,5 pt, também no A4), duas colunas por folha,
+  categorias como no romaneio, quadradinhos *Separado* / *Retorno*, e as assinaturas na última folha. Lista grande
+  quebra em quantas folhas precisar. No PDF do evento, as salas vêm em sequência (título + folhas técnicas) e **todas
+  as listas no fim**, com a numeração corrida. Tira em *Energia e processamento → Lista no fim do PDF: Sem*.
 - **Prancha editável** (na prévia das *Folhas do PDF*; tudo vem no padrão e o que você muda fica gravado na sala
   e vale no PDF):
   - **arrastar** telas, racks, controladoras/CVT e a processadora — os cabos se refazem sozinhos;
@@ -254,4 +259,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 76 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 77 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

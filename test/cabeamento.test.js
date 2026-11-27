@@ -241,3 +241,23 @@ test('folha de título da sala (fora da numeração), textos livres com seta, te
   assert.ok(Math.abs(s1.escala - s0.escala * 0.5) < 1e-9);                   // a escala do carimbo acompanha
   assert.ok(s1.alvos.filter(a => a.tipo === 'texto' && a.fixo).length >= 9);  // o carimbo fica no lugar
 });
+
+test('lista de material como folha do projeto: letra de impressão, quebra em folhas, assinaturas na última', () => {
+  const cat = catalogoInicial();
+  const ps = M.planoSala([{ id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3 }], cat, {});
+  const itens = n => Array.from({ length: n }, (_, i) => ({ qtd: i + 1, nome: 'Item ' + (i + 1), obs: '' }));
+  const dados = q => ({ telasTxt: 'Central', info: ['IBET'], grupos: [{ nome: 'Energia', itens: itens(q) }], carimbo: [[['Itens', String(q)]], [['Ida', '—']], [['Volta', '—']]], ass: ['', '', ''] });
+  const curta = Cab.folhasListaMaterial(ps, { sala: 'Auditório' }, dados(20), { inicio: 3, total: 4 });
+  assert.equal(curta.length, 1);
+  assert.equal(curta[0].tipo, 'lista');
+  const tx = f => f.prims.filter(p => p.t === 'text');
+  assert.ok(tx(curta[0]).some(p => p.txt === '4/4'));                                     // numeração do projeto
+  assert.ok(tx(curta[0]).filter(p => /^Item /.test(p.txt)).every(p => p.size >= 9.5));    // letra de impressão
+  assert.ok(tx(curta[0]).some(p => p.txt === 'Separado por'));                            // assinaturas
+  const longa = Cab.folhasListaMaterial(ps, { sala: 'Auditório' }, dados(200), { formato: 'a4' });
+  assert.ok(longa.length >= 3);                                                           // quebra em quantas folhas precisar
+  assert.ok(tx(longa[1]).some(p => p.txt === 'ENERGIA (CONT.)'));                         // a categoria continua
+  assert.ok(!tx(longa[0]).some(p => p.txt === 'Separado por') && tx(longa[longa.length - 1]).some(p => p.txt === 'Separado por'));
+  const todos = longa.flatMap(f => tx(f).filter(p => /^Item /.test(p.txt)).map(p => p.txt));
+  assert.equal(new Set(todos).size, 200);                                                 // nenhum item some
+});

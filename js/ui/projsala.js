@@ -553,21 +553,21 @@ export function render(ctx, [id]) {
   ${htmlMontagem(ctx, lista, ps, pode)}
 
   <div class="card pj-folhas"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
-      <span class="dir">${folhas.length ? (() => { const on = document.body.classList.contains('cheio-pj'); return `<button class="btn sm tela-cheia-btn" data-cheio="pj" title="${on ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}">${B.ico(on ? 'cheia_sair' : 'cheia')} ${on ? 'Sair' : 'Tela cheia'}</button> `; })() : ''}${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
+      <span class="dir">${folhas.length ? (() => { const on = document.body.classList.contains('cheio-pj'); return `<button class="btn sm tela-cheia-btn" data-cheio="pj" title="${on ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}">${B.ico(on ? 'cheia_sair' : 'cheia')} ${on ? 'Sair' : 'Tela cheia'}</button> `; })() : ''}${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}${f.partes > 1 ? ' ' + f.parte : ''}</button>`).join(' ')}</span></h2>
     ${pode && folhas.length ? (() => {
       const f = folhas[fi], h = historico.get(id) || { antes: [], depois: [] }, pj = lista.projeto || {};
       const temLay = Object.keys((pj.layout || {})[f.tipo] || {}).length, temTxt = Object.keys(pj.textos || {}).length, temLig = !!(pj.processamento && pj.processamento.ctrls);
       return `<div class="pj-barra">
         ${f.tipo === 'sinal' || f.tipo === 'ambos' ? `<span class="peq mut2">Pôr:</span>${Object.entries(M.CONTROLADORAS).map(([t, C]) => `<button class="btn sm pj-novo" data-tipo="${t}">+ ${C.nome}</button>`).join('')}` : ''}
-        <button class="btn sm pj-nota-nova" title="Acrescentar um texto (com seta, se quiser) nesta folha">+ Texto</button>
-        ${f.tipo !== 'titulo' ? `<span class="pj-zoom-g"><button class="btn sm pj-zoom" data-z="-1" title="Desenho menor">−</button><span class="peq mut2">Desenho ${Math.round((+((pj.layout || {})[f.tipo] || {}).zoom || 1) * 100)}%</span><button class="btn sm pj-zoom" data-z="1" title="Desenho maior">+</button></span>` : ''}
+        ${f.tipo !== 'lista' ? '<button class="btn sm pj-nota-nova" title="Acrescentar um texto (com seta, se quiser) nesta folha">+ Texto</button>' : '<span class="peq mut2">A lista sai do jeito que está na aba Lista da sala.</span>'}
+        ${f.tipo !== 'titulo' && f.tipo !== 'lista' ? `<span class="pj-zoom-g"><button class="btn sm pj-zoom" data-z="-1" title="Desenho menor">−</button><span class="peq mut2">Desenho ${Math.round((+((pj.layout || {})[f.tipo] || {}).zoom || 1) * 100)}%</span><button class="btn sm pj-zoom" data-z="1" title="Desenho maior">+</button></span>` : ''}
         <span class="cresce"></span>
         <button class="btn sm pj-desf" ${h.antes.length ? '' : 'disabled'} title="Desfazer (Ctrl+Z)">↶ Desfazer</button>
         <button class="btn sm pj-ref" ${h.depois.length ? '' : 'disabled'} title="Refazer (Ctrl+Y)">↷ Refazer</button></div>`
         + `<div class="proj-prev pj-folha pode">${svgDaFolha(ctx, lista, f, { alvos: true, sel: selPrancha.get(id) })}</div>`
         + selecaoHtml(ctx, ps, selPrancha.get(id))
-        + `<div class="pj-arraste peq mut2">${B.ico('info')} <span class="cresce">Arraste telas, aparelhos e textos para mudar o lugar · bolinha verde da porta até uma controladora/CVT liga o cabo · toque num texto para escrever por cima · + Texto acrescenta um texto (com seta).</span>
-          ${temLay ? '<button class="btn sm pj-lay-auto">Lugares automáticos</button>' : ''}${temLig ? '<button class="btn sm pj-lig-auto">Ligações automáticas</button>' : ''}${temTxt ? '<button class="btn sm pj-txt-auto">Textos padrão</button>' : ''}</div>`;
+        + (f.tipo === 'lista' ? '' : `<div class="pj-arraste peq mut2">${B.ico('info')} <span class="cresce">Arraste telas, aparelhos e textos para mudar o lugar · bolinha verde da porta até uma controladora/CVT liga o cabo · toque num texto para escrever por cima · + Texto acrescenta um texto (com seta).</span>
+          ${temLay ? '<button class="btn sm pj-lay-auto">Lugares automáticos</button>' : ''}${temLig ? '<button class="btn sm pj-lig-auto">Ligações automáticas</button>' : ''}${temTxt ? '<button class="btn sm pj-txt-auto">Textos padrão</button>' : ''}</div>`);
     })() : folhas.length ? `<div class="proj-prev pj-folha">${svgDaFolha(ctx, lista, folhas[fi])}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
     <div class="pj-resumo">
       <span><b>${pl1(ps.portas, 'porta', 'portas')}</b></span><span><b>${pl1(ps.circuitos, 'circuito', 'circuitos')}</b></span>
@@ -594,6 +594,7 @@ export function render(ctx, [id]) {
       <label class="campo"><span>Folha do PDF</span>${sel('folha', Object.entries(FORMATOS).map(([k, F]) => [k, F.nome]), formatoDaLista(lista))}</label>
       <label class="campo"><span>Folhas</span>${sel('folhas', [['auto', 'Automático'], ['separadas', 'AC e Sinal separadas'], ['juntas', 'Uma folha só (AC e Sinal)']], sc.folhas)}</label>
       <label class="campo"><span>Folha de título</span>${sel('capa', [['1', 'Com (nome da sala)'], ['0', 'Sem']], sc.capa === '0' ? '0' : '1')}</label>
+      <label class="campo"><span>Lista no fim do PDF</span>${sel('listas_pdf', [['1', 'Com (para imprimir)'], ['0', 'Sem']], sc.listas_pdf === '0' ? '0' : '1')}</label>
     </div>
     <p class="dica">Cada bloco de porta é um circuito de powercon (dividido se passar do limite por circuito) e desce até uma régua; a régua junta circuitos até o limite dela; as réguas da sala inteira são repartidas nos racks. O PDF sai na prancha do Projetech Calculator (A3, 16:9 ou A4), com o desenho do projeto da Syngenta: folha de AC (réguas e rack de energia) e folha de Sinal (controladoras e processadora); no automático, sala com 1 tela e 1 régua sai numa folha só.</p>
   </details>
@@ -648,7 +649,7 @@ export function ligar(el, ctx, [id]) {
     const campo = inp.dataset.sc;
     let val = inp.value;
     if (campo === 'reguas_rack') { val = B.lerNum(val); if (!(val >= 1)) { inp.classList.add('erro'); return; } }
-    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: !['processadora', 'folhas', 'folha', 'capa'].includes(campo) });
+    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: !['processadora', 'folhas', 'folha', 'capa', 'listas_pdf'].includes(campo) });
   }));
   el.querySelectorAll('[data-todas]').forEach(inp => inp.addEventListener('change', () => {
     const val = B.lerNum(inp.value);

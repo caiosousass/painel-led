@@ -1312,6 +1312,87 @@ export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato
   return { tipo: modo, prims: P, formato: F, escala: esc, area, alvos };
 }
 
+
+/* A lista de material da sala como folha do projeto (para imprimir e mandar pro evento): a mesma moldura e o mesmo
+ * carimbo das outras folhas, letra de impressão (~10 pt no A3), duas colunas de tabela por folha, categorias como no
+ * romaneio, quadradinhos para marcar Separado / Retorno e, na última folha, as assinaturas. Lista grande quebra em
+ * quantas folhas precisar (a categoria continua com "(cont.)").
+ * dados = { telasTxt, info: [texto…], grupos: [{ nome, itens: [{ qtd, nome, obs }] }], carimbo: [[rot, val]…], ass: [nome…] } */
+export function folhasListaMaterial(ps, meta, dados, { inicio = 0, total, formato, razaoLogo } = {}) {
+  const F = FORMATOS[formato] || FORMATOS.a3, Q = quadro(F), { U, MG, PW } = Q;
+  const area = { x: MG + 6 * U, y: MG + 13 * U, w: PW - 2 * MG - 12 * U, h: Q.drawBottom - (MG + 13 * U) };
+  // a letra nunca fica menor que 9,5 pt (impresso em A4 também)
+  const fsz = Math.max(7 * U, 9.5), mmF = fsz * MM_PT, rh = mmF * 1.8, nBl = 2, gap = 8 * U, bw = (area.w - gap * (nBl - 1)) / nBl;
+  const yTab = area.y + 7 * U, hAss = 13 * U;
+  const porBloco = Math.max(6, Math.floor((area.y + area.h - hAss - yTab) / rh) - 1);   // linhas abaixo do cabeçalho
+  // as linhas: categoria e itens, repartidas em blocos (colunas) e folhas
+  const linhas = [];
+  for (const g of dados.grupos || []) { if (!(g.itens || []).length) continue; linhas.push({ cat: g.nome }); for (const it of g.itens) linhas.push(Object.assign({ catDe: g.nome }, it)); }
+  const paginas = [];
+  let pg = Array.from({ length: nBl }, () => []), b = 0;
+  const proximo = () => { b++; if (b >= nBl) { paginas.push(pg); pg = Array.from({ length: nBl }, () => []); b = 0; } };
+  linhas.forEach(l => {
+    if (pg[b].length >= porBloco || (l.cat && pg[b].length >= porBloco - 1)) proximo();
+    if (!l.cat && !pg[b].length) pg[b].push({ cat: l.catDe + ' (cont.)' });
+    pg[b].push(l);
+  });
+  paginas.push(pg);
+  const sala = textoDe(ps, 'sala', meta.sala || '') || 'Sala';
+  const campo = (rot, chave, padrao) => [rot, textoDe(ps, chave, padrao || ''), chave, padrao || ''];
+  const tag = ((ps.telas.map(it => it.painel && it.painel.modelo).find(Boolean) || '').match(/P\d+(?:[.,]\d+)?/i) || [''])[0].toUpperCase().replace(',', '.');
+  const col = { q: 0.09, eq: 0.55, sep: 0.12, ret: 0.12 };
+  return paginas.map((blocos, ip) => {
+    const P = [];
+    P.push({ t: 'rect', x: MG, y: MG, w: PW - 2 * MG, h: F.h - 2 * MG, stroke: '#1e1e1e', sw: 0.4 * U });
+    P.push({ t: 'text', x: MG + 4 * U, y: MG + 5.6 * U, txt: 'Lista de material · ' + sala + (paginas.length > 1 ? ` (${ip + 1}/${paginas.length})` : ''), size: 9 * U, bold: true, color: '#464646' });
+    if (dados.telasTxt) P.push({ t: 'text', x: MG + 4 * U, y: MG + 9.8 * U, txt: corta(dados.telasTxt, PW - 2 * MG - 8 * U, 7 * U), size: 7 * U, color: '#787878' });
+    if ((dados.info || []).length) P.push({ t: 'text', x: area.x, y: area.y + 3.4 * U, txt: corta(dados.info.join('   ·   '), area.w, 6.6 * U, true), size: 6.6 * U, bold: true, color: '#1f2937' });
+    blocos.forEach((bl, j) => {
+      if (!bl.length && j) return;
+      const x0 = area.x + j * (bw + gap), xs = { q: x0, eq: x0 + bw * col.q, sep: x0 + bw * (col.q + col.eq), ret: x0 + bw * (col.q + col.eq + col.sep), obs: x0 + bw * (col.q + col.eq + col.sep + col.ret) };
+      // cabeçalho
+      P.push({ t: 'rect', x: x0, y: yTab, w: bw, h: rh, fill: '#e5e7eb' });
+      const hb = yTab + rh * 0.68;
+      [['Qtd', xs.q + bw * col.q - 1.2 * U, 'right'], ['Equipamento', xs.eq + 1.4 * U], ['Separado', xs.sep + bw * col.sep / 2, 'center'], ['Retorno', xs.ret + bw * col.ret / 2, 'center'], ['Obs.', xs.obs + 1.4 * U]]
+        .forEach(([t, x, al]) => P.push({ t: 'text', x, y: hb, txt: t, size: fsz * 0.86, bold: true, align: al, color: '#111827' }));
+      bl.forEach((l, i) => {
+        const y = yTab + rh * (i + 1), yb = y + rh * 0.68;
+        if (l.cat) {
+          P.push({ t: 'rect', x: x0, y, w: bw, h: rh, fill: '#f1f5f9' });
+          P.push({ t: 'text', x: xs.q + 1.4 * U, y: yb, txt: String(l.cat).toUpperCase(), size: fsz * 0.82, bold: true, color: '#334155', cs: 0.12 * U });
+        } else {
+          P.push({ t: 'text', x: xs.q + bw * col.q - 1.2 * U, y: yb, txt: fmtNum(+l.qtd || 0, (+l.qtd || 0) % 1 ? 1 : 0), size: fsz, bold: true, align: 'right', color: '#111827' });
+          P.push({ t: 'text', x: xs.eq + 1.4 * U, y: yb, txt: corta(l.nome || '', bw * col.eq - 2.6 * U, fsz), size: fsz, color: '#111827' });
+          const qd = mmF * 0.95;
+          for (const cx of [xs.sep + bw * col.sep / 2, xs.ret + bw * col.ret / 2]) P.push({ t: 'rect', x: cx - qd / 2, y: y + (rh - qd) / 2, w: qd, h: qd, stroke: '#6b7280', sw: 0.18 * U });
+          if (l.obs) P.push({ t: 'text', x: xs.obs + 1.4 * U, y: yb, txt: corta(l.obs, bw * (1 - col.q - col.eq - col.sep - col.ret) - 2.4 * U, fsz * 0.78), size: fsz * 0.78, color: '#4b5563' });
+        }
+        P.push({ t: 'line', x1: x0, y1: y + rh, x2: x0 + bw, y2: y + rh, stroke: '#d1d5db', sw: 0.15 * U });
+      });
+      const hT = rh * (bl.length + 1);
+      [xs.eq, xs.sep, xs.ret, xs.obs].forEach(x => P.push({ t: 'line', x1: x, y1: yTab, x2: x, y2: yTab + hT, stroke: '#d1d5db', sw: 0.15 * U }));
+      P.push({ t: 'rect', x: x0, y: yTab, w: bw, h: hT, stroke: '#6b7280', sw: 0.25 * U });
+    });
+    if (!linhas.length) P.push({ t: 'text', x: area.x, y: yTab + 6 * U, txt: 'Lista sem itens.', size: fsz, color: '#6b7280' });
+    // assinaturas, na última folha
+    if (ip === paginas.length - 1) {
+      const rot = ['Separado por', 'Conferido por', 'Retorno conferido por'], wA = (area.w - 2 * gap) / 3, yA = area.y + area.h - 3 * U;
+      rot.forEach((r, i) => {
+        const x = area.x + i * (wA + gap);
+        P.push({ t: 'line', x1: x, y1: yA - 4.2 * U, x2: x + wA, y2: yA - 4.2 * U, stroke: '#6b7280', sw: 0.2 * U });
+        P.push({ t: 'text', x, y: yA, txt: r + ((dados.ass || [])[i] ? ': ' + dados.ass[i] : ''), size: 6 * U, color: '#4b5563' });
+      });
+    }
+    carimbo(P, Q, {
+      grupos: dados.carimbo || [[['Itens', '—']], [['Página', '1']], [['Sala', sala]]], ps,
+      esq: [campo('Projeto', 'projeto', meta.projeto || 'Painel de LED ' + tag), campo('Local', 'local', meta.local), ['Ambiente/Sala', sala, 'sala', meta.sala || ''], campo('Responsável Técnico(a)', 'responsavel', meta.responsavel)],
+      dir: [campo('Data de montagem', 'montagem', dataCurta(meta.montagem)), campo('Data de emissão', 'emissao', dataCurta(meta.emissao)), campo('Cliente', 'cliente', meta.cliente), campo('Agência', 'agencia', meta.agencia)],
+      com: campo('Nº O.S', 'os', meta.os), numero: inicio + ip + 1, total: total || inicio + paginas.length, razaoLogo
+    });
+    return { tipo: 'lista', parte: ip + 1, partes: paginas.length, prims: P, formato: F, escala: 0, area, alvos: [] };
+  });
+}
+
 /* As folhas do projeto técnico de uma sala: AC e Sinal (ou uma só, "AC e Sinal", na sala pequena) */
 export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas, formato, capa } = {}) {
   const desenhaveis = ps.telas.filter(it => it.pl);

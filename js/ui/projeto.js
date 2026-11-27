@@ -9,7 +9,7 @@ import * as Cab from '../cabeamento.js';
 
 // cores das portas (as do projeto) — também no 3D
 export const CORES = Cab.CORES_PORTA;
-export const NOME_FOLHA = { titulo: 'Título', ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal' };
+export const NOME_FOLHA = { titulo: 'Título', ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal', lista: 'Lista' };
 export const FORMATOS = Cab.FORMATOS;
 export function formatoDaLista(lista) { const f = (lista.projeto || {}).folha; return Cab.FORMATOS[f] ? f : 'a3'; }
 const RAZAO_LOGO = 2946 / 842;          // logo.png
@@ -26,9 +26,46 @@ function metaDaLista(ctx, lista, hoje) {
 }
 
 /* as folhas de uma sala: [{ tipo: 'ac'|'sinal'|'ambos', prims, formato }] */
-export function folhasDaLista(ctx, lista, { hoje, inicio, total } = {}) {
+/* A lista de material da sala, do jeito que vai na folha (mesma ordem e categorias do romaneio impresso) */
+function dadosDaListaMaterial(ctx, lista) {
+  const { B, M } = ctx, cat = ctx.catIdx();
+  const linhas = M.ordenarParaSeparar(ctx.linhasDa(lista.id).filter(M.linhaAtiva), ctx.est.catalogo);
+  const tot = M.totaisLista(lista, linhas, ctx.est.catalogo);
+  const grupos = [];
+  for (const l of linhas) {
+    const c = cat.get(l.item), g = c ? c.cat : 'outros', nome = ctx.CATEGORIAS[g] || 'Outros';
+    if (!grupos.length || grupos[grupos.length - 1].chave !== g) grupos.push({ chave: g, nome, itens: [] });
+    grupos[grupos.length - 1].itens.push({ qtd: l.qtd, nome: c ? c.nome : l.item, obs: l.obs || '' });
+  }
+  const telasTxt = (lista.telas || []).map(t => {
+    const c = cat.get(t.painel), g = c && c.painel ? M.geometria(t, c.painel) : null;
+    return `${t.nome || 'Tela'}: ${c ? c.nome.replace('Case de Led ', '') : '?'}${g && g.gabinetes ? ` — ${g.largura_m ? B.num(g.largura_m) + ' × ' + B.num(g.altura_m) + ' m, ' : ''}${g.gabinetes} gab.` : ''}`;
+  }).join(' · ');
+  const nItens = linhas.length;
+  return {
+    telasTxt,
+    info: [lista.evento || '', lista.os ? 'OS ' + lista.os : '', 'Ida ' + B.dataBR(lista.ida, true), 'Volta ' + B.dataBR(lista.volta, true)].filter(Boolean),
+    grupos,
+    carimbo: [[['Itens', String(nItens)], ['Cases de LED', B.num(tot.cases_led)]], [['Peso dos painéis', B.num(tot.peso_painel_kg, 1) + ' kg'], ['Potência', B.num(tot.potencia_max_w / 1000, 1) + ' kW máx']],
+      [['Ida', B.dataBR(lista.ida, true)], ['Volta', B.dataBR(lista.volta, true)]]],
+    ass: [(lista.sep && lista.sep.por) || '', (lista.conf && lista.conf.por) || '', (lista.ret && lista.ret.por) || '']
+  };
+}
+const listaNoPdf = lista => (lista.projeto || {}).listas_pdf !== '0';
+function folhasDaListaMaterial(ctx, lista, { hoje, inicio, total } = {}) {
   const ps = ctx.M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
-  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista), capa: (lista.projeto || {}).capa !== '0' });
+  return Cab.folhasListaMaterial(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), dadosDaListaMaterial(ctx, lista), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista) });
+}
+/* As folhas da sala: título (sem número), as técnicas e, no fim, a lista de material (semListas: só as técnicas) */
+export function folhasDaLista(ctx, lista, { hoje, inicio = 0, total, semListas } = {}) {
+  const ps = ctx.M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
+  const meta = metaDaLista(ctx, lista, hoje || ctx.hoje()), op = { razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista), capa: (lista.projeto || {}).capa !== '0' };
+  const comLista = !semListas && listaNoPdf(lista);
+  const nTec = Cab.folhasTecnicas(ps, meta, op).filter(f => f.tipo !== 'titulo').length;
+  const nLis = comLista ? folhasDaListaMaterial(ctx, lista, { hoje }).length : 0;
+  const tot = total || inicio + nTec + nLis;
+  const tec = Cab.folhasTecnicas(ps, meta, Object.assign({ inicio, total: tot }, op));
+  return comLista ? tec.concat(folhasDaListaMaterial(ctx, lista, { hoje, inicio: inicio + nTec, total: tot })) : tec;
 }
 
 export function svgDaFolha(ctx, lista, folha, op) { return Cab.svg(folha, IMAGENS_SVG, op); }
@@ -63,12 +100,15 @@ async function exportarProjetoDe(ctx, listas, partesNome) {
   const imagens = {};
   try { imagens.logo = await carregarImagem('logo.png', 1000); } catch (e) { /* sai sem logo */ }
   const hoje = ctx.hoje();
-  const contas = listas.map(l => folhasDaLista(ctx, l, { hoje }).filter(f => f.tipo !== 'titulo').length);   // a folha de título não conta
-  const total = contas.reduce((a, b) => a + b, 0);
-  if (!total) throw new Error('Nenhuma tela com painel e medida (L × A) para desenhar.');
+  const contas = listas.map(l => folhasDaLista(ctx, l, { hoje, semListas: true }).filter(f => f.tipo !== 'titulo').length);   // a folha de título não conta
+  if (!contas.reduce((a, b) => a + b, 0)) throw new Error('Nenhuma tela com painel e medida (L × A) para desenhar.');
+  const comLista = listas.filter(listaNoPdf), contasL = comLista.map(l => folhasDaListaMaterial(ctx, l, { hoje }).length);
+  const total = contas.reduce((a, b) => a + b, 0) + contasL.reduce((a, b) => a + b, 0);
   const folhas = [];
   let n = 0;
-  listas.forEach((l, i) => { folhas.push(...folhasDaLista(ctx, l, { hoje, inicio: n, total })); n += contas[i]; });
+  listas.forEach((l, i) => { folhas.push(...folhasDaLista(ctx, l, { hoje, inicio: n, total, semListas: true })); n += contas[i]; });
+  // no fim do projeto, as listas de todas as salas (cada uma nas suas folhas)
+  comLista.forEach((l, i) => { folhas.push(...folhasDaListaMaterial(ctx, l, { hoje, inicio: n, total })); n += contasL[i]; });
   if (!folhas.length) throw new Error('Nenhuma folha para exportar.');
   const { jsPDF } = window.jspdf;
   const F0 = folhas[0].formato;
