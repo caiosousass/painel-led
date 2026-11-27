@@ -534,6 +534,14 @@ export function posicoesDaSala(ps) {
   return out;
 }
 
+// bolinha com texto no meio (o número do cabo), do tamanho que cabe nela
+function bolinha(P, x, y, r, fill, stroke, txt) {
+  P.push({ t: 'circle', x, y, r, fill, stroke, sw: 0.15 });
+  if (!txt) return;
+  const mm = r * (txt.length >= 3 ? 0.88 : txt.length === 2 ? 1.08 : 1.3);
+  P.push({ t: 'text', x, y: y + mm * 0.36, txt, size: mm / MM_PT, bold: true, align: 'center', color: '#ffffff' });
+}
+
 function gradeTecnica(P, g, modo) {
   const pl = g.pl, sinal = modo !== 'ac';
   const grupos = sinal ? pl.dados.portas : pl.energia.circuitos;
@@ -561,9 +569,12 @@ function gradeTecnica(P, g, modo) {
       const [ax, ay] = pts[k - 1], [bx, by] = pts[k], mx = (ax + bx) / 2, my = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
       P.push({ t: 'tri', fill: azul, pts: [[mx + Math.cos(ang) * tr, my + Math.sin(ang) * tr], [mx + Math.cos(ang + 2.5) * tr, my + Math.sin(ang + 2.5) * tr], [mx + Math.cos(ang - 2.5) * tr, my + Math.sin(ang - 2.5) * tr]] });
     }
-    const rr = Math.max(0.5, m * 0.12);
-    P.push({ t: 'circle', x: pts[0][0], y: pts[0][1], r: rr, fill: '#22c55e', stroke: '#14532d', sw: 0.15 });
-    P.push({ t: 'circle', x: pts[pts.length - 1][0], y: pts[pts.length - 1][1], r: rr, fill: '#ef4444', stroke: '#7f1d1d', sw: 0.15 });
+    // bolinhas com a ordem do cabo: verde = onde o cabo entra (1, 2…); vermelha = fim da corrente, onde entra
+    // o cabo da redundância (1B, 2B…) quando ela está ligada. No AC, a verde leva o número do circuito.
+    const rr = Math.max(0.55, m * 0.13);
+    const ini = String(gp.n), fim = sinal && g.it.cfg && g.it.cfg.backup ? gp.n + 'B' : '';
+    bolinha(P, pts[0][0], pts[0][1], rr, '#16a34a', '#14532d', ini);
+    bolinha(P, pts[pts.length - 1][0], pts[pts.length - 1][1], rr, '#dc2626', '#7f1d1d', fim);
   }
   if (sinal && pt >= 2.1) {
     const ctrl = (CONTROLADORAS[g.it.ctrl.item] || {}).nome || '';

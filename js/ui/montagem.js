@@ -115,6 +115,11 @@ function svgSala(its, modo, temp, fixo, ps) {
           out.push(`<polygon points="${[0, 2.5, -2.5].map(d => `${mx + Math.cos(a + d) * tr},${my + Math.sin(a + d) * tr}`).join(' ')}" fill="#1e3a8a"/>`);
         }
         const [sx, sy] = pts[0], rr = m * 0.27;
+        if (o.it.cfg && o.it.cfg.backup && pts.length > 1) {
+          const [ex, ey] = pts[pts.length - 1];
+          out.push(`<circle cx="${ex}" cy="${ey}" r="${rr}" fill="#dc2626" stroke="#7f1d1d" stroke-width="${rr * 0.16}"/>`);
+          out.push(`<text x="${ex}" y="${ey + rr * 0.34}" font-size="${rr * 0.92}" font-weight="700" text-anchor="middle" fill="#ffffff">${p.n}B</text>`);
+        }
         out.push(`<circle cx="${sx}" cy="${sy}" r="${rr}" fill="#ffffff" stroke="${p.pixels > pl.dados.px_porta ? '#dc2626' : '#000000'}" stroke-width="${rr * 0.16}"/>`);
         out.push(`<text x="${sx}" y="${sy + rr * 0.38}" font-size="${rr * 1.05}" font-weight="700" text-anchor="middle" fill="#000000">${p.n}</text>`);
       }

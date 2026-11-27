@@ -119,6 +119,9 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
 - **Cabeamento de Sinal** — cada porta com a sua cor e a etiqueta Novastar (C · P · RV · A · WH) em cada
   gabinete; as portas de cada tela descem até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de
   pixels; ou Taurus TB60 / TB1) e as controladoras até a **processadora** da sala (o nome vem do Projeto da sala).
+  As bolinhas levam a **ordem do cabo**: verde onde o cabo entra (1, 2…) e, com **redundância** (Cabo de dados:
+  2 por porta), a vermelha do fim da corrente vira **1B, 2B…** (onde entra o cabo reserva). No AC, a verde leva
+  o número do circuito.
 - Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer. Dá para pedir sempre separadas ou
   sempre juntas em *Energia e processamento da sala*.
 

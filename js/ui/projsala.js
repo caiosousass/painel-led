@@ -66,7 +66,7 @@ function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
       <label class="campo"><span>Começa</span>${sel('inicio', [['inf-esq', 'Embaixo, esq.'], ['inf-dir', 'Embaixo, dir.'], ['sup-esq', 'Em cima, esq.'], ['sup-dir', 'Em cima, dir.']], cfg.inicio)}</label>
       <label class="campo"><span>Cada porta</span>${sel('portas', [['colunas', 'Linhas inteiras'], ['cheia', 'Enche a porta']], cfg.portas)}</label>
       <label class="campo"><span>Controladora</span>${sel('controladora', [['auto', 'MCTRL660'], ['taurus-tb60', 'Taurus TB60'], ['taurus-tb1', 'Taurus TB1'], ['nenhuma', 'Nenhuma']], cfg.controladora)}</label>
-      <label class="campo"><span>Cabo de dados</span>${sel('backup', [['0', '1 por porta'], ['1', '2 por porta (backup)']], cfg.backup ? '1' : '0')}</label>
+      <label class="campo"><span>Cabo de dados</span>${sel('backup', [['0', '1 por porta'], ['1', '2 por porta (redundância)']], cfg.backup ? '1' : '0')}</label>
     </div>
     <div class="res">${res}</div>
   </div>`;
