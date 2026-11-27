@@ -134,6 +134,7 @@ const ITENS = [
   ['cabo-dc-lv', 'Cabo DC 5V LiteVision', 'energia', null],
   ['controle-rgb', 'Controle LED/RGB', 'acessorio', null],
   ['cvt10', 'Conversor de fibra CVT10-S Novastar', 'processamento', null],
+  ['cvt4k-s', 'Conversor de fibra CVT4K-S Novastar', 'processamento', null],
   // P1.9 (pedido de 03/11/2026): entram logo depois do LiteVision (ordem 100). Estoque informado pelo Caio:
   // Reto 30 cases (240 placas, 60 m²), Quina 20 cases (160 placas, 40 m²)
   ['led-p19', 'Case de Led P1.9mm Absen NT V2 Reto', 'led', 30, { painel: P19, ordem: 101 }],
@@ -142,7 +143,7 @@ const ITENS = [
 
 /* Itens que entraram no catálogo depois da primeira versão: o app acrescenta os que faltam num catálogo
  * já gravado (sem mexer nos que existem). */
-export const VERSAO_CATALOGO = 4; // 2: entram os P1.9 · 3: estoque dos P1.9 (30 e 20 cases) · 4: gabinetes por circuito 12 (padrão chutado) → pelo consumo
+export const VERSAO_CATALOGO = 5; // 5: entra o CVT4K-S · 2: entram os P1.9 · 3: estoque dos P1.9 (30 e 20 cases) · 4: gabinetes por circuito 12 (padrão chutado) → pelo consumo
 export const ITENS_NOVOS = ['led-p19', 'led-p19-q']; // entraram depois da primeira versão do catálogo
 
 export const CATEGORIAS = [
@@ -182,7 +183,7 @@ const P19_CHAPINHA = ['led-p19', 'led-p19-q'];
 
 /* Sobe a cada mudança nas regras padrão: aparelhos com as regras antigas (e não editadas) se atualizam sozinhos.
  * 3 = réguas, racks e cabos de dados vêm do projeto da tela (13/10/2026). */
-export const VERSAO_REGRAS = 7; // 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10 · 6: estrutura do Calculator (palco, pesos por metro, segunda linha) · 7: projeto da sala (racks da sala, circuitos, controladoras)
+export const VERSAO_REGRAS = 8; // 8: CVT10 / CVT4K-S do projeto (extensores de fibra da série H) · 4: P1.9 usa jumper de 1 m · 5: P1.9 com chapinha do NT e parafuso do V10 · 6: estrutura do Calculator (palco, pesos por metro, segunda linha) · 7: projeto da sala (racks da sala, circuitos, controladoras)
 
 export function regrasIniciais() {
   const r = [
@@ -202,6 +203,8 @@ export function regrasIniciais() {
     // processamento: as controladoras de cada tela (o projeto escolhe), 1 de reserva e o cabo USB para configurar
     R({ item: 'send-660', base: 'ctrl_660', obs: 'Do projeto: MCTRL660 da tela — cada uma segura 4 portas e 2,3 milhões de pixels.' }),
     R({ item: 'taurus-tb60', base: 'ctrl_tb60', obs: 'Do projeto, quando a tela usa Taurus TB60 (4 portas, 2,3 milhões de pixels).' }),
+    R({ item: 'cvt10', base: 'ctrl_cvt10', obs: 'Do projeto, quando a tela usa CVT10 (extensor de fibra da série H: 10 portas).' }),
+    R({ item: 'cvt4k-s', base: 'ctrl_cvt4k', obs: 'Do projeto, quando a tela usa CVT4K-S (extensor de fibra da série H: 16 portas).' }),
     R({ item: 'taurus-tb1', base: 'ctrl_tb1', obs: 'Do projeto, quando a tela usa Taurus TB1 (1 porta, 650 mil pixels).' }),
     R({ escopo: 'lista', item: 'send-660', base: 'lista', cond: { base: 'ctrl_660', op: '>', valor: 0 }, obs: '1 MCTRL660 de reserva por lista (Borges e Costa: 1 tela com 2 portas levou 2).' }),
     R({ escopo: 'lista', item: 'usb-ab', base: 'lista', cond: { base: 'controladoras', op: '>', valor: 0 }, obs: '1 cabo USB AB por lista, para configurar a controladora.' }),

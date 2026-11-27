@@ -153,3 +153,24 @@ test('processamento: portas nas controladoras (automático enche saídas e pixel
   assert.equal(r.itens.get('taurus-tb60').qtd, 1);
   assert.equal(r.itens.get('send-660').qtd, 5 + 1);   // + 1 de reserva
 });
+
+test('série H: CVT10 / CVT4K-S como extensor de fibra, processadora H desenhada pelo modelo', () => {
+  const cat = catalogoInicial();
+  const T = (id, l, a, ctrl) => ({ id, nome: id, painel: 'led-v10', modo: 'medida', largura_m: l, altura_m: a, projeto: { controladora: ctrl } });
+  // Central 10 x 4 m = 8 portas: cabe num CVT4K-S (16) ou num CVT10 (10); com MCTRL660 seriam 2
+  for (const [ctrl, tipo] of [['cvt4k-s', 'cvt4k-s'], ['cvt10', 'cvt10'], ['auto', 'send-660']]) {
+    const ps = M.planoSala([T('c', 10, 4, ctrl)], cat, { processadora: 'H9' });
+    assert.deepEqual(Object.keys(ps.controladoras), [tipo]);
+    assert.equal(ps.controladoras[tipo], tipo === 'send-660' ? 2 : 1);
+  }
+  assert.deepEqual(['H9', 'Novastar H15', 'h 5', 'H2', 'VX1000', 'H19'].map(Cab.modeloProcessadora), ['H9', 'H15', 'H5', 'H2', null, null]);
+  const ps = M.planoSala([T('c', 10, 4, 'cvt4k-s')], cat, { processadora: 'H9' });
+  const sinal = Cab.folhasTecnicas(ps, { sala: 'Plenária' }, { folhas: 'separadas' }).find(f => f.tipo === 'sinal');
+  const textos = sinal.prims.filter(p => p.t === 'text').map(p => p.txt);
+  assert.ok(textos.includes('Processadora H9') && textos.includes('fibra') && textos.includes('CVT4K-S'));
+  // a lista conta o CVT4K-S (e não MCTRL660)
+  const r = M.calcularSugestoes([T('c', 10, 4, 'cvt4k-s')], cat, regrasIniciais(), { sala: { processadora: 'H9' } });
+  const q = id => (r.itens.get(id) || { qtd: 0 }).qtd;
+  assert.equal(q('cvt4k-s'), 1);
+  assert.equal(q('send-660'), 0);
+});

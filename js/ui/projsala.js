@@ -12,7 +12,7 @@ import { htmlMontagem, ligarMontagem } from './montagem.js';
 
 const folhaVista = new Map(); // lista → folha mostrada
 
-const NOME_CTRL = { 'send-660': 'MCTRL660', 'taurus-tb60': 'Taurus TB60', 'taurus-tb1': 'Taurus TB1' };
+const NOME_CTRL = { 'send-660': 'MCTRL660', 'taurus-tb60': 'Taurus TB60', 'taurus-tb1': 'Taurus TB1', 'cvt10': 'CVT10', 'cvt4k-s': 'CVT4K-S' };
 const pl1 = (n, s, p) => n + ' ' + (n === 1 ? s : p);
 
 function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
@@ -65,7 +65,7 @@ function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
       <label class="campo"><span>Sinal</span>${sel('sentido', [['auto', 'Automático'], ['vertical', 'Vertical (colunas)'], ['horizontal', 'Horizontal (fileiras)']], cfg.sentido)}</label>
       <label class="campo"><span>Começa</span>${sel('inicio', [['inf-esq', 'Embaixo, esq.'], ['inf-dir', 'Embaixo, dir.'], ['sup-esq', 'Em cima, esq.'], ['sup-dir', 'Em cima, dir.']], cfg.inicio)}</label>
       <label class="campo"><span>Cada porta</span>${sel('portas', [['colunas', 'Linhas inteiras'], ['cheia', 'Enche a porta']], cfg.portas)}</label>
-      <label class="campo"><span>Controladora</span>${sel('controladora', [['auto', 'MCTRL660'], ['taurus-tb60', 'Taurus TB60'], ['taurus-tb1', 'Taurus TB1'], ['nenhuma', 'Nenhuma']], cfg.controladora)}</label>
+      <label class="campo"><span>Controladora</span>${sel('controladora', [['auto', 'MCTRL660'], ['taurus-tb60', 'Taurus TB60'], ['taurus-tb1', 'Taurus TB1'], ['cvt10', 'CVT10 (fibra da H)'], ['cvt4k-s', 'CVT4K-S (fibra da H)'], ['nenhuma', 'Nenhuma']], cfg.controladora)}</label>
       <label class="campo"><span>Cabo de dados</span>${sel('backup', [['0', '1 por porta'], ['1', '2 por porta (redundância)']], cfg.backup ? '1' : '0')}</label>
     </div>
     <div class="res">${res}</div>
@@ -93,7 +93,7 @@ export function render(ctx, [id]) {
   const cat = ctx.catIdx();
   const ativas = ctx.linhasDa(id).filter(M.linhaAtiva)
     .sort((a, b) => ctx.ORDEM_CAT.indexOf((cat.get(a.item) || {}).cat) - ctx.ORDEM_CAT.indexOf((cat.get(b.item) || {}).cat) || ((cat.get(a.item) || {}).ordem || 0) - ((cat.get(b.item) || {}).ordem || 0));
-  const doProjeto = new Set(['pc-10m', 'rj-20m', 'regua-pc', 'rack-9', 'rack-12', 'rack-5', 'camlock-150', 'send-660', 'taurus-tb1', 'taurus-tb60', 'usb-ab', 'prol-media', 'prol-longa', 'mf-192', 'mf-144', 'mf-096', 'peso']);
+  const doProjeto = new Set(['pc-10m', 'rj-20m', 'regua-pc', 'rack-9', 'rack-12', 'rack-5', 'camlock-150', 'send-660', 'taurus-tb1', 'taurus-tb60', 'cvt10', 'cvt4k-s', 'usb-ab', 'prol-media', 'prol-longa', 'mf-192', 'mf-144', 'mf-096', 'peso']);
   const ctrls = Object.entries(ps.controladoras).map(([c, q]) => q + ' × ' + NOME_CTRL[c]).join(' + ');
   const racksTxt = ps.racks.length ? pl1(ps.racks.length, 'rack', 'racks') + ' de ' + [...new Set(ps.racks.map(r => M.RACKS[r.tipo]))].join('/') + ' saídas' : 'sem rack';
 
@@ -134,7 +134,9 @@ export function render(ctx, [id]) {
       <label class="campo"><span>Réguas por rack</span><input inputmode="numeric" data-sc="reguas_rack" data-k="pj-rr" value="${v(sc.reguas_rack || cfg0.reguas_rack)}" ${pode ? '' : 'disabled'}></label>
       <label class="campo"><span>Limite por régua (kW)</span><input inputmode="decimal" data-todas="kw_regua" data-k="pj-kr" value="${v(cfg0.kw_regua)}" ${pode ? '' : 'disabled'}></label>
       <label class="campo"><span>Limite por circuito (kW)</span><input inputmode="decimal" data-todas="kw_circuito" data-k="pj-kc" value="${v(cfg0.kw_circuito)}" ${pode ? '' : 'disabled'}></label>
-      <label class="campo"><span>Processadora</span><input data-sc="processadora" data-k="pj-proc" value="${B.esc(sc.processadora || '')}" placeholder="Ex.: VX1000 (aparece na folha)" ${pode ? '' : 'disabled'}></label>
+      <label class="campo"><span>Processadora</span><select data-sc="processadora" ${pode ? '' : 'disabled'}>${[['', '— sem processadora —'], ['H2', 'Novastar H2'], ['H5', 'Novastar H5'], ['H9', 'Novastar H9'], ['H15', 'Novastar H15']]
+        .concat(sc.processadora && !['H2', 'H5', 'H9', 'H15'].includes(sc.processadora) ? [[sc.processadora, sc.processadora + ' (escrita antes)']] : [])
+        .map(([val, txt]) => `<option value="${B.esc(val)}" ${val === (sc.processadora || '') ? 'selected' : ''}>${B.esc(txt)}</option>`).join('')}</select></label>
       <label class="campo"><span>Folha do PDF</span>${sel('folha', Object.entries(FORMATOS).map(([k, F]) => [k, F.nome]), formatoDaLista(lista))}</label>
       <label class="campo"><span>Folhas</span>${sel('folhas', [['auto', 'Automático'], ['separadas', 'AC e Sinal separadas'], ['juntas', 'Uma folha só (AC e Sinal)']], sc.folhas)}</label>
     </div>

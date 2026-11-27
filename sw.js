@@ -1,7 +1,7 @@
 /* Projetech · Painel de LED — service worker.
  * Rede primeiro (nunca serve versão velha quando há internet) e cache como reserva:
  * sem sinal no galpão o app abre do mesmo jeito. Os DADOS ficam no IndexedDB, não aqui. */
-const CACHE = 'painel-led-v35';
+const CACHE = 'painel-led-v36';
 const ARQUIVOS = [
   './', 'index.html', 'manifest.json', 'css/app.css', 'logo.png', 'logo-mark.png',
   'fonts/montserrat-400.woff2', 'fonts/montserrat-700.woff2', 'icons/icon-192.png',

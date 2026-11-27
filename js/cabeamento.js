@@ -34,7 +34,10 @@ export const RACKS = { 'rack-5': 5, 'rack-9': 9, 'rack-12': 12 };
 export const CONTROLADORAS = {
   'send-660': { nome: 'MCTRL660', portas: 4, px: 2300000 },
   'taurus-tb60': { nome: 'Taurus TB60', portas: 4, px: 2300000 },
-  'taurus-tb1': { nome: 'Taurus TB1', portas: 1, px: 650000 }
+  'taurus-tb1': { nome: 'Taurus TB1', portas: 1, px: 650000 },
+  // extensores de fibra da série H: perto da tela, recebem a fibra da processadora e soltam as portas de rede
+  'cvt10': { nome: 'CVT10', portas: 10, px: 6500000, fibra: true },
+  'cvt4k-s': { nome: 'CVT4K-S', portas: 16, px: 8847360, fibra: true }
 };
 /* Da sala: racks repartidos na sala inteira ou por tela, a processadora e as folhas (auto | separadas | juntas) */
 export const SALA_PADRAO = { racks: 'sala', processadora: '', folhas: 'auto', folha: 'a3' };
@@ -656,12 +659,171 @@ function tomadasDoRack(rs, socks, xr, w) {
   return out;
 }
 
+/* ---------------- os aparelhos Novastar, desenhados pela frente real de cada um ----------------
+ * Mesmo traço do rack: chapas escuras, portas claras, nome do modelo na frente. Cada função desenha com o
+ * topo em y, centrada em cx, na largura w, e devolve { w, h } do que desenhou. */
+const ptMM = mm => mm / MM_PT;
+function orelhasRack(P, x0, y, w, h, e, furos) {
+  for (const x of [x0, x0 + w - e]) {
+    P.push({ t: 'rect', x, y, w: e, h, fill: '#0d0d0d', stroke: '#000000', sw: h * 0.02 });
+    for (let i = 0; i < furos; i++) P.push({ t: 'circle', x: x + e / 2, y: y + h * (i + 0.5) / furos, r: Math.min(e * 0.2, h * 0.08), fill: '#6b7280' });
+  }
+}
+function portaRJ45(P, x, y, s) {
+  P.push({ t: 'rect', x, y, w: s, h: s * 0.82, fill: '#d1d5db', stroke: '#111111', sw: s * 0.05, r: s * 0.08 });
+  P.push({ t: 'rect', x: x + s * 0.18, y: y + s * 0.14, w: s * 0.64, h: s * 0.4, fill: '#1f2937' });
+  P.push({ t: 'rect', x: x + s * 0.36, y: y + s * 0.54, w: s * 0.28, h: s * 0.14, fill: '#1f2937' });
+}
+function portaFibra(P, x, y, s) {
+  P.push({ t: 'rect', x, y, w: s, h: s * 0.72, fill: '#a7f3d0', stroke: '#065f46', sw: s * 0.05, r: s * 0.06 });
+  P.push({ t: 'rect', x: x + s * 0.16, y: y + s * 0.18, w: s * 0.26, h: s * 0.36, fill: '#064e3b' });
+  P.push({ t: 'rect', x: x + s * 0.58, y: y + s * 0.18, w: s * 0.26, h: s * 0.36, fill: '#064e3b' });
+}
+function etherCON(P, cx, cy, r) {
+  P.push({ t: 'circle', x: cx, y: cy, r, fill: '#9ca3af', stroke: '#111111', sw: r * 0.1 });
+  P.push({ t: 'circle', x: cx, y: cy, r: r * 0.6, fill: '#111111' });
+  P.push({ t: 'rect', x: cx - r * 0.16, y: cy - r * 0.98, w: r * 0.32, h: r * 0.3, fill: '#d1d5db' });
+}
+// fileira de n portas iguais, alinhada à direita em [xa, xb], centrada na altura yc
+function fileira(P, n, xa, xb, yc, sMax, desenha) {
+  const s = Math.min(sMax, (xb - xa) / (n * 1.2));
+  for (let i = 0; i < n; i++) desenha(xb - (n - i) * s * 1.2 + s * 0.1, yc, s);
+  return s;
+}
+
+/* MCTRL660 e CVT10: 1U de rack (orelhas, nome, portas de rede na frente; a 660 tem o visor e o botão) */
+function aparelho1U(P, cx, y, w, nome, op) {
+  const h = w / 6.2, x0 = cx - w / 2, e = h * 0.32;
+  P.push({ t: 'rect', x: x0, y, w, h, fill: '#1a1a1a', stroke: '#000000', sw: h * 0.03, r: h * 0.05 });
+  orelhasRack(P, x0, y, w, h, e, 1);
+  const xi = x0 + e + h * 0.22;
+  P.push({ t: 'text', x: xi, y: y + h * 0.36, txt: nome, size: ptMM(h * 0.24), bold: true, color: '#ffffff' });
+  let xa = x0 + w * 0.36;
+  if (op.visor) {
+    P.push({ t: 'rect', x: xi, y: y + h * 0.48, w: w * 0.13, h: h * 0.34, fill: '#0284c7', stroke: '#0c4a6e', sw: h * 0.02 });
+    P.push({ t: 'circle', x: xi + w * 0.13 + h * 0.42, y: y + h * 0.62, r: h * 0.2, fill: '#9ca3af', stroke: '#111111', sw: h * 0.02 });
+    P.push({ t: 'rect', x: xi + w * 0.13 + h * 0.78, y: y + h * 0.54, w: h * 0.22, h: h * 0.16, fill: '#9ca3af' });
+  }
+  if (op.fibras) {
+    const s = h * 0.42;
+    for (let i = 0; i < op.fibras; i++) portaFibra(P, xi + i * s * 1.2, y + h * 0.5, s);
+    xa = Math.max(xa, xi + op.fibras * s * 1.2 + h * 0.3);
+  }
+  fileira(P, op.portas, xa, x0 + w - e - h * 0.2, 0, h * 0.46, (x, _, s) => {
+    P.push({ t: 'circle', x: x + s / 2, y: y + h * 0.2, r: s * 0.08, fill: '#22c55e' });
+    portaRJ45(P, x, y + h * 0.55 - s * 0.41, s);
+  });
+  return { w, h };
+}
+
+/* CVT4K-S: 2U, faixa verde em cima, 16 etherCON na fileira de cima; embaixo a fibra (4), USB e a energia */
+function aparelhoCVT4K(P, cx, y, w) {
+  const h = w / 5, x0 = cx - w / 2, e = h * 0.2;
+  P.push({ t: 'rect', x: x0, y, w, h, fill: '#141414', stroke: '#000000', sw: h * 0.02, r: h * 0.04 });
+  orelhasRack(P, x0, y, w, h, e, 2);
+  P.push({ t: 'rect', x: x0 + e, y: y + h * 0.05, w: w - 2 * e, h: h * 0.03, fill: '#22c55e' });
+  const xa = x0 + e + h * 0.12, xb = x0 + w - e - h * 0.12, passo = (xb - xa) / 16, r = Math.min(passo * 0.38, h * 0.15);
+  for (let i = 0; i < 16; i++) etherCON(P, xa + passo * (i + 0.5), y + h * 0.32, r);
+  const yb = y + h * 0.72;
+  P.push({ t: 'circle', x: xa + h * 0.16, y: yb, r: h * 0.12, fill: '#9ca3af', stroke: '#111111', sw: h * 0.015 });
+  P.push({ t: 'rect', x: xa + h * 0.36, y: yb - h * 0.07, w: h * 0.14, h: h * 0.14, fill: '#d1d5db' });
+  const gx = x0 + w * 0.28, gw = w * 0.2;
+  P.push({ t: 'rect', x: gx, y: yb - h * 0.17, w: gw, h: h * 0.34, stroke: '#9ca3af', sw: h * 0.012 });
+  for (let i = 0; i < 4; i++) portaFibra(P, gx + gw * 0.06 + i * gw * 0.235, yb - h * 0.09, gw * 0.2);
+  P.push({ t: 'text', x: x0 + w * 0.52, y: yb + h * 0.06, txt: 'CVT4K-S', size: ptMM(h * 0.15), bold: true, color: '#ffffff' });
+  P.push({ t: 'rect', x: x0 + w * 0.73, y: yb - h * 0.12, w: h * 0.36, h: h * 0.24, fill: '#2563eb', stroke: '#111111', sw: h * 0.012, r: h * 0.04 });
+  P.push({ t: 'rect', x: x0 + w * 0.73 + h * 0.46, y: yb - h * 0.08, w: h * 0.08, h: h * 0.16, fill: '#6b7280' });
+  P.push({ t: 'rect', x: xb - h * 0.3, y: yb - h * 0.15, w: h * 0.3, h: h * 0.3, fill: '#1d4ed8', r: h * 0.04 });
+  P.push({ t: 'circle', x: xb - h * 0.15, y: yb, r: h * 0.1, fill: '#dbeafe' });
+  return { w, h };
+}
+
+/* Taurus TB60 e TB1: caixa compacta de cantos arredondados (não é de rack) */
+function aparelhoTaurus(P, cx, y, w, nome, portas) {
+  const h = w / (portas > 1 ? 3.6 : 2.6), x0 = cx - w / 2;
+  P.push({ t: 'rect', x: x0, y, w, h, fill: '#262626', stroke: '#000000', sw: h * 0.025, r: h * 0.16 });
+  P.push({ t: 'text', x: x0 + h * 0.18, y: y + h * 0.34, txt: nome, size: ptMM(h * 0.24), bold: true, color: '#ffffff' });
+  P.push({ t: 'circle', x: x0 + h * 0.26, y: y + h * 0.62, r: h * 0.06, fill: '#22c55e' });
+  P.push({ t: 'rect', x: x0 + h * 0.42, y: y + h * 0.53, w: h * 0.42, h: h * 0.2, fill: '#d1d5db', stroke: '#111111', sw: h * 0.015 });   // HDMI
+  P.push({ t: 'rect', x: x0 + h * 0.92, y: y + h * 0.55, w: h * 0.2, h: h * 0.16, fill: '#d1d5db' });   // USB
+  fileira(P, portas, x0 + h * 1.25, x0 + w - h * 0.16, 0, h * 0.42, (x, _, s) => portaRJ45(P, x, y + h * 0.58 - s * 0.41, s));
+  return { w, h };
+}
+
+export function desenhaControladora(P, tipo, cx, y, w) {
+  if (tipo === 'taurus-tb1') return aparelhoTaurus(P, cx, y, w * 0.48, 'TB1', 1);
+  if (tipo === 'taurus-tb60') return aparelhoTaurus(P, cx, y, w * 0.72, 'TB60', 4);
+  if (tipo === 'cvt4k-s') return aparelhoCVT4K(P, cx, y, w);
+  if (tipo === 'cvt10') return aparelho1U(P, cx, y, w, 'CVT10', { portas: 10, fibras: 2 });
+  return aparelho1U(P, cx, y, w, (CONTROLADORAS[tipo] || {}).nome || 'MCTRL660', { portas: 4, visor: true });
+}
+
+/* Processadoras H (H2, H5, H9, H15): a frente da série H — chapas com as listras na diagonal, a faixa cinza
+ * com a tela touch no meio, o selo com o modelo, alças nas laterais. A altura cresce com o modelo. */
+export const PROCESSADORAS = {
+  H2: { nome: 'H2', alt: 0.27, faixa: [0.12, 0.88] },
+  H5: { nome: 'H5', alt: 0.5, faixa: [0.2, 0.6] },
+  H9: { nome: 'H9', alt: 0.83, faixa: [0.22, 0.52] },
+  H15: { nome: 'H15', alt: 1.25, faixa: [0.2, 0.42] }
+};
+export function modeloProcessadora(txt) {
+  const m = /(^|[^a-z0-9])h\s?-?(15|2|5|9)(?![0-9])/i.exec(String(txt || ''));
+  return m ? 'H' + m[2] : null;
+}
+export function desenhaProcessadoraH(P, mod, cx, y, w) {
+  const M = PROCESSADORAS[mod], h = w * M.alt, x0 = cx - w / 2, e = w * 0.045, lw = w * 0.0032;
+  const yf0 = y + h * M.faixa[0], yf1 = y + h * M.faixa[1], fh = yf1 - yf0;
+  if (mod !== 'H2') for (const x of [x0 - w * 0.03, x0 + w - w * 0.01]) {
+    P.push({ t: 'rect', x, y: yf0 + fh * 0.05, w: w * 0.04, h: Math.max(fh * 0.9, h * 0.3), fill: '#2b2b2b', stroke: '#111111', sw: lw * 1.5, r: w * 0.012 });
+  }
+  P.push({ t: 'rect', x: x0 + e, y, w: w - 2 * e, h, fill: '#3d3d3d', stroke: '#111111', sw: lw * 1.5 });
+  const furos = Math.max(1, Math.min(8, Math.round(h / (w * 0.09))));
+  for (const x of [x0, x0 + w - e]) {
+    P.push({ t: 'rect', x, y, w: e, h, fill: '#2e2e2e', stroke: '#111111', sw: lw * 1.5, r: e * 0.15 });
+    for (let i = 0; i < furos; i++) P.push({ t: 'circle', x: x + e / 2, y: y + h * (i + 0.5) / furos, r: e * 0.13, fill: '#e5e7eb' });
+  }
+  // as listras na diagonal (em cima à esquerda, embaixo no meio)
+  const listras = (xIni, yIni, alto) => {
+    for (let i = 0; i < 12; i++) {
+      const xs = xIni + i * w * 0.012, d = Math.min(alto, x0 + w - e - xs);
+      if (d > 0) P.push({ t: 'line', x1: xs, y1: yIni, x2: xs + d, y2: yIni + d, stroke: '#5a5a5a', sw: lw });
+    }
+  };
+  if (yf0 - y > h * 0.06) listras(x0 + e + w * 0.04, y + h * 0.01, yf0 - y - h * 0.02);
+  if (y + h - yf1 > h * 0.06) listras(x0 + w * 0.42, yf1 + h * 0.01, y + h - yf1 - h * 0.02);
+  // a faixa cinza com o "X" e a tela
+  P.push({ t: 'rect', x: x0 + e, y: yf0, w: w - 2 * e, h: fh, fill: '#8a8f98', stroke: '#2b2b2b', sw: lw * 1.5 });
+  const sw_ = w * (mod === 'H2' ? 0.2 : 0.3), sx = cx - sw_ / 2, sh = Math.min(fh * 0.86, sw_ * 0.62), sy = yf0 + (fh - sh) / 2, ym = yf0 + fh / 2;
+  if (mod !== 'H2') {
+    P.push({ t: 'tri', fill: '#6b7079', pts: [[sx - w * 0.12, yf0], [sx - w * 0.07, yf0], [sx - w * 0.01, ym], [sx - w * 0.07, yf1], [sx - w * 0.12, yf1], [sx - w * 0.06, ym]] });
+    P.push({ t: 'tri', fill: '#6b7079', pts: [[sx + sw_ + w * 0.12, yf0], [sx + sw_ + w * 0.07, yf0], [sx + sw_ + w * 0.01, ym], [sx + sw_ + w * 0.07, yf1], [sx + sw_ + w * 0.12, yf1], [sx + sw_ + w * 0.06, ym]] });
+  }
+  P.push({ t: 'rect', x: sx, y: sy, w: sw_, h: sh, fill: '#111111', r: sh * 0.05 });
+  const ix = sx + sw_ * 0.05, iy = sy + sh * 0.1, iw = sw_ * 0.9, ih = sh * 0.82;
+  P.push({ t: 'rect', x: ix, y: iy, w: iw, h: ih, fill: '#1e1b4b' });
+  P.push({ t: 'rect', x: ix + iw * 0.04, y: iy + ih * 0.2, w: iw * 0.27, h: ih * 0.72, fill: '#312e81' });
+  P.push({ t: 'rect', x: ix + iw * 0.33, y: iy + ih * 0.2, w: iw * 0.27, h: ih * 0.72, fill: '#312e81' });
+  P.push({ t: 'circle', x: ix + iw * 0.175, y: iy + ih * 0.5, r: ih * 0.06, fill: '#ef4444' });
+  P.push({ t: 'circle', x: ix + iw * 0.465, y: iy + ih * 0.5, r: ih * 0.06, fill: '#10b981' });
+  for (let i = 0; i < 3; i++) P.push({ t: 'rect', x: ix + iw * 0.63, y: iy + ih * (0.2 + i * 0.25), w: iw * 0.33, h: ih * 0.21, fill: '#3730a3' });
+  // o selo com o modelo
+  const bw = w * 0.11, bh = Math.min(fh * 0.22, bw * 0.4), bx = x0 + e + w * 0.03, by = yf0 + fh * 0.12;
+  P.push({ t: 'rect', x: bx, y: by, w: bw, h: bh, stroke: '#ffffff', sw: lw * 1.5, r: bh * 0.45 });
+  P.push({ t: 'text', x: bx + bw / 2, y: by + bh * 0.74, txt: M.nome, size: ptMM(bh * 0.72), bold: true, align: 'center', color: '#ffffff' });
+  P.push({ t: 'text', x: bx + bw / 2, y: by + bh + bh * 0.55, txt: 'VIDEO WALL SPLICER', size: ptMM(bh * 0.32), align: 'center', color: '#f3f4f6' });
+  // pés
+  for (const x of [x0 + w * 0.14, x0 + w * 0.86 - w * 0.04]) P.push({ t: 'rect', x, y: y + h, w: w * 0.04, h: w * 0.012, fill: '#111111', r: w * 0.004 });
+  return { w, h };
+}
+
 /* desenha a sala na área; k = tamanho dos aparelhos e letras (o U da prancha). Devolve a escala (mm por m). */
 function salaTecnica(P, ps, area, modo, k) {
   const its = ps.telas.map((it, ti) => ({ it, ti })).filter(o => o.it.pl);
   if (!its.length) return 0;
   const comAC = modo !== 'sinal', comSinal = modo === 'sinal';
-  const hBaixo = Math.min(area.h * 0.46, (modo === 'ambos' ? 44 : 58) * k);
+  // processadora alta (H9, H15) ganha mais espaço embaixo das telas
+  const mProc = comSinal ? modeloProcessadora(ps.cfg.processadora) : null, alta = mProc && PROCESSADORAS[mProc].alt > 0.6 ? 12 * k : 0;
+  const hBaixo = Math.min(area.h * (alta ? 0.54 : 0.46), (modo === 'ambos' ? 44 : 58) * k + alta);
   const pos = posicoesDaSala(ps);
   const x0m = Math.min(...its.map(o => pos.get(o.it)));
   const x1m = Math.max(...its.map(o => pos.get(o.it) + o.it.pl.largura_m));
@@ -743,7 +905,7 @@ function salaTecnica(P, ps, area, modo, k) {
   if (comSinal) {
     const yBusS = yBase + Math.min(7 * k, hBaixo * 0.13);
     const lista = (ps.processamento && ps.processamento.ctrls) || [];
-    const cH = 4.6 * k, cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, lista.length * 1.6)));
+    const cW = Math.min(30 * k, Math.max(18 * k, area.w / Math.max(1, lista.length * 1.6)));
     const yC = yBase + hBaixo * 0.3;
     // cada controladora: as portas ligadas nela descem até um barramento e dele até a controladora
     const geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
@@ -764,6 +926,7 @@ function salaTecnica(P, ps, area, modo, k) {
       return { c, x: (a + b) / 2, xb: (a + b) / 2 };
     });
     espalhar(ctrls, cW, xMin, xMax);
+    let baixoC = yC;   // onde acabam as controladoras e as legendas delas
     for (const cc of ctrls) {
       const c = cc, ct = cc.c, nome = (CONTROLADORAS[ct.tipo] || {}).nome || 'Controladora';
       // legenda: saída da controladora → tela e nº do cabo (a bolinha). Tudo de uma tela, em sequência:
@@ -774,30 +937,43 @@ function salaTecnica(P, ps, area, modo, k) {
       const ult = ligs[ligs.length - 1];
       const nomes = seguidos ? [`P${ligs[0].i + 1}–P${ult.i + 1}: ${nomeT(ligs[0].p.ti)} cabos ${ligs[0].p.n}–${ult.p.n}`]
         : ligs.map(x => `P${x.i + 1}: ${nomeT(x.p.ti)} ${x.p.n}`);
-      const it = { ctrl: { qtd: 1 }, portas: ct.usadas, cfg: {} };
       if (c.xb != null) P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
-      // a controladora: aparelho de 1U preto, com o display e as portas
-      P.push({ t: 'rect', x: c.x - cW / 2, y: yC, w: cW, h: cH, fill: '#1f2937', stroke: '#0b0f17', sw: 0.3 * k, r: 0.6 * k });
-      P.push({ t: 'rect', x: c.x - cW * 0.44, y: yC + cH * 0.25, w: cW * 0.2, h: cH * 0.5, fill: '#0ea5e9' });
-      for (let i = 0; i < 4; i++) P.push({ t: 'rect', x: c.x + cW * 0.14 + i * cW * 0.075, y: yC + cH * 0.32, w: cW * 0.05, h: cH * 0.36, fill: '#93c5fd' });
-      P.push({ t: 'text', x: c.x - cW * 0.04, y: yC + cH * 0.66, txt: nome, size: 4.6 * k, bold: true, align: 'center', color: '#ffffff' });
-      P.push({ t: 'text', x: c.x, y: yC + cH + 3.2 * k, txt: corta(`${nome} ${ct.n} · ${it.portas} porta${it.portas === 1 ? '' : 's'}`, cW * 1.15, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
-      if (nomes.length) P.push({ t: 'text', x: c.x, y: yC + cH + 6 * k, txt: corta(nomes.join(' · '), cW * 1.15, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
+      // o aparelho (MCTRL660, Taurus, CVT…) desenhado pela frente real dele
+      const d = desenhaControladora(P, ct.tipo, c.x, yC, cW);
+      c.w = d.w; c.h = d.h;
+      // as legendas ficam na largura da caixa: o cabo até a processadora sai pelo lado, sem passar por cima delas
+      P.push({ t: 'text', x: c.x, y: yC + d.h + 3.2 * k, txt: corta(`${nome} ${ct.n} · ${ct.usadas} porta${ct.usadas === 1 ? '' : 's'}`, cW * 0.95, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
+      if (nomes.length) P.push({ t: 'text', x: c.x, y: yC + d.h + 6 * k, txt: corta(nomes.join(' · '), cW * 0.95, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
+      baixoC = Math.max(baixoC, yC + d.h + (nomes.length ? 7 : 4.4) * k);
     }
     const proc = ps.cfg.processadora || (geo.length > 1 ? 'Processadora' : '');
     if (proc) {
-      const pW = 34 * k, pH = 13 * k, yP = yBase + hBaixo * 0.62;
+      // processadora H: o desenho da série H, na altura do modelo (encolhe se não couber até o carimbo)
+      const mod = modeloProcessadora(proc), alt = mod ? PROCESSADORAS[mod].alt : 13 / 34;
+      const yP = baixoC + 5 * k, livre = Math.max(8 * k, yBase + hBaixo - yP - 6 * k);
+      const pW = Math.max(12 * k, Math.min(34 * k, livre / alt)), pH = pW * alt;
       const xP = Math.min(xMax - pW / 2, Math.max(xMin + pW / 2, (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2));
-      const yJ = (yC + cH + 8 * k + yP) / 2;   // abaixo dos nomes das controladoras
-      for (const c of ctrls) P.push({ t: 'poly', pts: [[c.x, yC + cH], [c.x, yJ], [xP, yJ]], stroke: '#111827', sw: 0.3 * k });
-      P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111827', sw: 0.3 * k });
-      // a processadora: aparelho maior, com a tela azul e os botões
-      P.push({ t: 'rect', x: xP - pW / 2, y: yP, w: pW, h: pH, fill: '#374151', stroke: '#111827', sw: 0.35 * k, r: 1 * k });
-      P.push({ t: 'rect', x: xP - pW * 0.32, y: yP + pH * 0.22, w: pW * 0.34, h: pH * 0.5, fill: '#60a5fa' });
-      for (let i = 0; i < 3; i++) P.push({ t: 'rect', x: xP + pW * 0.1 + i * pW * 0.09, y: yP + pH * 0.3, w: pW * 0.06, h: pH * 0.12, fill: '#d1d5db' });
-      P.push({ t: 'rect', x: xP - pW / 2 + 1.2 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
-      P.push({ t: 'rect', x: xP + pW / 2 - 2.8 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
-      P.push({ t: 'text', x: xP, y: yP + pH + 4.6 * k, txt: proc, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+      const yJ = (baixoC + yP) / 2;
+      // cada controladora liga pelo lado (o cabo não passa por cima das legendas); a fibra (CVT) é preta e
+      // mais grossa, com "fibra" escrito ao lado
+      for (const c of ctrls) {
+        const fib = !!(CONTROLADORAS[c.c.tipo] || {}).fibra, ym = yC + c.h / 2, xl = c.x + cW * 0.5 + 0.8 * k;
+        P.push({ t: 'poly', pts: [[c.x + c.w / 2, ym], [xl, ym], [xl, yJ], [xP, yJ]], stroke: '#111111', sw: (fib ? 0.75 : 0.3) * k });
+        if (fib) P.push({ t: 'text', x: xl + 0.9 * k, y: (ym + yJ) / 2 + 1.2 * k, txt: 'fibra', size: 4.4 * k, bold: true, color: '#111111' });
+      }
+      P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111111', sw: (ctrls.some(c => (CONTROLADORAS[c.c.tipo] || {}).fibra) ? 0.75 : 0.3) * k });
+      if (mod) {
+        desenhaProcessadoraH(P, mod, xP, yP, pW);
+        P.push({ t: 'text', x: xP, y: yP + pH + pW * 0.012 + 4.2 * k, txt: 'Processadora ' + mod, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+      } else {
+        // outra processadora: a caixa genérica, com a tela azul e os botões
+        P.push({ t: 'rect', x: xP - pW / 2, y: yP, w: pW, h: pH, fill: '#374151', stroke: '#111827', sw: 0.35 * k, r: 1 * k });
+        P.push({ t: 'rect', x: xP - pW * 0.32, y: yP + pH * 0.22, w: pW * 0.34, h: pH * 0.5, fill: '#60a5fa' });
+        for (let i = 0; i < 3; i++) P.push({ t: 'rect', x: xP + pW * 0.1 + i * pW * 0.09, y: yP + pH * 0.3, w: pW * 0.06, h: pH * 0.12, fill: '#d1d5db' });
+        P.push({ t: 'rect', x: xP - pW / 2 + 1.2 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
+        P.push({ t: 'rect', x: xP + pW / 2 - 2.8 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
+        P.push({ t: 'text', x: xP, y: yP + pH + 4.6 * k, txt: proc, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+      }
     }
   }
   if (modo === 'ambos') {

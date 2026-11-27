@@ -121,7 +121,11 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
   cabos não se cruzam.
 - **Cabeamento de Sinal** — cada porta com a sua cor e a etiqueta Novastar (C · P · RV · A · WH) em cada
   gabinete; as portas de cada tela descem até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de
-  pixels; ou Taurus TB60 / TB1) e as controladoras até a **processadora** da sala (o nome vem do Projeto da sala).
+  pixels; ou Taurus TB60 / TB1) e as controladoras até a **processadora** da sala (Novastar H2, H5, H9 ou H15,
+  escolhida em *Energia e processamento da sala*). Com a série H, a tela pode usar um **extensor de fibra** no
+  lugar da controladora: **CVT10** (10 portas) ou **CVT4K-S** (16 portas) — o cabo até a H sai preto e mais
+  grosso, escrito "fibra". Cada aparelho é desenhado pela frente real dele (MCTRL660, TB60, TB1, CVT10, CVT4K-S
+  e a frente da série H, na altura de cada modelo), no mesmo traço do rack.
   As bolinhas levam a **ordem do cabo**: verde onde o cabo entra (1, 2…) e, com **redundância** (Cabo de dados:
   2 por porta), a vermelha do fim da corrente vira **1B, 2B…** (onde entra o cabo reserva). No AC, a verde leva
   o número do circuito. A etiqueta fica em cima à esquerda do gabinete e o cabo corre no canto de baixo à direita
@@ -220,4 +224,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 72 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 73 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

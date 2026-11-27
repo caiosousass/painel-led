@@ -287,16 +287,17 @@ function basesDoProjeto(it) {
   return {
     portas: it.portas, cabos_dados: it.cabos_dados, circuitos_projeto: it.circuitos, reguas: it.reguas, racks,
     racks_5: tipo === 'rack-5' ? racks : 0, racks_9: tipo === 'rack-9' ? racks : 0, racks_12: tipo === 'rack-12' ? racks : 0,
-    controladoras: it.ctrl.qtd, ctrl_660: ctrl('send-660'), ctrl_tb1: ctrl('taurus-tb1'), ctrl_tb60: ctrl('taurus-tb60')
+    controladoras: it.ctrl.qtd, ctrl_660: ctrl('send-660'), ctrl_tb1: ctrl('taurus-tb1'), ctrl_tb60: ctrl('taurus-tb60'),
+    ctrl_cvt10: ctrl('cvt10'), ctrl_cvt4k: ctrl('cvt4k-s')
   };
 }
 
 // Bases que a tela de regras oferece (a tela é quem dá nome humano a elas).
 export const BASES_TELA = ['gabinetes', 'cases', 'colunas', 'linhas', 'largura_m', 'altura_m', 'm2', 'circuitos', 'circuitos_projeto', 'portas',
-  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60',
+  'cabos_dados', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60', 'ctrl_cvt10', 'ctrl_cvt4k',
   'apoios', 'mf_192', 'mf_144', 'mf_096', 'pesos', 'mf_segunda_linha', 'tela'];
 export const BASES_LISTA = ['lista', 'gabinetes', 'gabinetes_chao', 'cases', 'circuitos', 'telas', 'telas_chao', 'm2',
-  'circuitos_projeto', 'portas', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60'];
+  'circuitos_projeto', 'portas', 'reguas', 'racks', 'racks_5', 'racks_9', 'racks_12', 'controladoras', 'ctrl_660', 'ctrl_tb1', 'ctrl_tb60', 'ctrl_cvt10', 'ctrl_cvt4k'];
 
 /* ============================================================
  * Motor de regras
@@ -402,7 +403,8 @@ export function calcularSugestoes(telas, catalogo, regras, { sala } = {}) {
     racks_5: ps.racks.filter(r => r.tipo === 'rack-5').length, racks_9: ps.racks.filter(r => r.tipo === 'rack-9').length,
     racks_12: ps.racks.filter(r => r.tipo === 'rack-12').length,
     controladoras: Object.values(ps.controladoras).reduce((a, b) => a + b, 0),
-    ctrl_660: ps.controladoras['send-660'] || 0, ctrl_tb1: ps.controladoras['taurus-tb1'] || 0, ctrl_tb60: ps.controladoras['taurus-tb60'] || 0 };
+    ctrl_660: ps.controladoras['send-660'] || 0, ctrl_tb1: ps.controladoras['taurus-tb1'] || 0, ctrl_tb60: ps.controladoras['taurus-tb60'] || 0,
+    ctrl_cvt10: ps.controladoras['cvt10'] || 0, ctrl_cvt4k: ps.controladoras['cvt4k-s'] || 0 };
 
   const juntar = (o, extra) => {
     if (!itens.has(o.item)) itens.set(o.item, { qtd: 0, origens: [] });
