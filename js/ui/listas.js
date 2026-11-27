@@ -195,6 +195,14 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
   const avisoTela = t => !t.painel
     ? `<div class="aviso-tela">${t.pitch_os ? `A OS pede <b>${B.esc(t.pitch_os)}</b> e a casa não tem esse painel (sublocado?).` : 'Não deu para saber o painel pela OS.'} Ficou de fora — se for nosso, marque e escolha o painel.</div>`
     : t.suposto ? '<div class="aviso-tela">A OS não diz o pitch: supus P2.9 V10. Confira.</div>' : '';
+  // Montagem na importação: no chão, a mão francesa sai do chão; sobre o palco, ela sai do chão (atrás do
+  // palco, e a altura do palco entra na conta) ou apoia no palco — muda a altura da mão francesa e os pesos
+  const MONT_OS = [['chao', 'No chão (mão francesa no chão)'], ['palco-chao', 'Sobre o palco · mão francesa no chão'], ['palco-palco', 'Sobre o palco · mão francesa no palco']]
+    .concat(Object.entries(B.MONTAGEM).filter(([k]) => k !== 'chao'));
+  const montIni = t => (t.montagem === 'chao' && t.palco ? 'palco-chao' : t.montagem || 'chao');
+  const dicaPalco = v => v === 'palco-palco'
+    ? 'A mão francesa apoia no palco: conta só a altura do painel. O palco precisa de 0,80 m de fundo atrás do painel (senão ela vai no chão).'
+    : 'A mão francesa sai do chão, atrás do palco: a altura do palco soma com a do painel (ela fica mais alta e leva mais pesos).';
   const dup = ctx.est.listas.find(l => info.os && l.os === info.os && l.status !== 'cancelada');
   const salasOS = [...new Set(info.telas.map(t => t.sala || ''))];
   const variasSalas = salasOS.length > 1;
@@ -226,13 +234,26 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
         <div class="peq mut2" style="margin:4px 0 8px">${B.esc(t.texto)}</div>
         ${avisoTela(t)}
         <div class="grade g2 m1"><label class="campo"><span>Painel</span><select class="f-painel">${opc(t.painel)}</select></label>
-        <label class="campo"><span>Montagem</span><select class="f-mont">${Object.entries(B.MONTAGEM).map(([k, v]) => `<option value="${k}" ${k === t.montagem ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+        <label class="campo"><span>Montagem</span><select class="f-mont">${MONT_OS.map(([k, v]) => `<option value="${k}" ${k === montIni(t) ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+        <div class="f-palco grade g2 m1" style="margin-top:8px" ${montIni(t).startsWith('palco') ? '' : 'hidden'}>
+          <label class="campo"><span>Altura do palco (m)</span><input class="f-palco-alt" inputmode="decimal" placeholder="Ex.: 0,60" value="${t.palco && t.palco.altura_m ? B.num(t.palco.altura_m) : ''}"></label>
+          <div class="peq mut2 f-palco-dica" style="align-self:end;padding-bottom:6px">${dicaPalco(montIni(t))}</div>
+        </div>
       </div>`).join('') : '<p class="muted">Nenhuma linha de painel de LED com medida. A lista é criada só com o cabeçalho.</p>'}
       ${info.outros.length ? `<h3 style="margin:16px 0 6px;font-size:14px">Outros itens de vídeo da OS (conferir)</h3><div class="peq muted">${info.outros.map(o => `• ${B.num(o.qtd)} × ${B.esc(o.texto)}${o.sala ? ' <span class="mut2">(' + B.esc(o.sala) + ')</span>' : ''}`).join('<br>')}</div>` : ''}`,
     aoAbrir: (el, fechar) => {
       el.querySelectorAll('.tela[data-i]').forEach(d => {
         // escolheu o painel numa tela que estava de fora → entra na lista
         d.querySelector('.f-painel').addEventListener('change', e => { if (e.target.value) { d.querySelector('.f-usa').checked = true; e.target.classList.remove('erro'); } });
+        // sobre o palco: pede a altura do palco
+        const mont = d.querySelector('.f-mont'), box = d.querySelector('.f-palco'), alt = d.querySelector('.f-palco-alt');
+        mont.addEventListener('change', () => {
+          const pal = mont.value.startsWith('palco');
+          box.hidden = !pal;
+          d.querySelector('.f-palco-dica').textContent = dicaPalco(mont.value);
+          if (pal && !alt.value) alt.focus();
+        });
+        alt.addEventListener('input', () => alt.classList.remove('erro'));
       });
       const refazer = el.querySelector('.refazer-abas');
       if (refazer) refazer.onclick = () => {
@@ -244,10 +265,14 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
     botoes: [{ txt: 'Cancelar', valor: null }, {
       txt: 'Criar lista e projeto', cls: 'pri',
       validar: el => {
-        const semPainel = [...el.querySelectorAll('.tela[data-i]')].filter(d => d.querySelector('.f-usa').checked && !d.querySelector('.f-painel').value);
+        const marcadas = [...el.querySelectorAll('.tela[data-i]')].filter(d => d.querySelector('.f-usa').checked);
+        const semPainel = marcadas.filter(d => !d.querySelector('.f-painel').value);
         semPainel.forEach(d => d.querySelector('.f-painel').classList.add('erro'));
-        if (semPainel.length) { semPainel[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); B.toast('Escolha o painel das telas marcadas (ou desmarque).'); }
-        return !semPainel.length;
+        if (semPainel.length) { semPainel[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); B.toast('Escolha o painel das telas marcadas (ou desmarque).'); return false; }
+        const semPalco = marcadas.filter(d => { const h = B.lerNum(d.querySelector('.f-palco-alt').value); return d.querySelector('.f-mont').value.startsWith('palco') && !(h > 0 && h < 10); });
+        semPalco.forEach(d => d.querySelector('.f-palco-alt').classList.add('erro'));
+        if (semPalco.length) { semPalco[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); B.toast('Informe a altura do palco (ex.: 0,60).'); return false; }
+        return true;
       },
       valor: el => ({
         os: el.querySelector('.f-os').value.trim(), evento: el.querySelector('.f-evento').value.trim(),
@@ -255,7 +280,11 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
         ida: el.querySelector('.f-ida').value || null, volta: el.querySelector('.f-volta').value || null,
         porSala: variasSalas && (el.querySelector('[name="modo-os"]:checked') || {}).value === 'salas',
         escolhidas: [...el.querySelectorAll('.tela[data-i]')].filter(d => d.querySelector('.f-usa').checked)
-          .map(d => ({ t: info.telas[+d.dataset.i], painel: d.querySelector('.f-painel').value, montagem: d.querySelector('.f-mont').value }))
+          .map(d => {
+            const m = d.querySelector('.f-mont').value;
+            const palco = m.startsWith('palco') ? { sobre: true, altura_m: B.lerNum(d.querySelector('.f-palco-alt').value), fundo_m: null, mf: m === 'palco-palco' ? 'palco' : 'chao' } : null;
+            return { t: info.telas[+d.dataset.i], painel: d.querySelector('.f-painel').value, montagem: palco ? 'chao' : m, palco };
+          })
       })
     }]
   });
@@ -263,7 +292,7 @@ async function importarOS(ctx, arquivo, { abasEscolhidas, abasLidas } = {}) {
   if (res.refazerAbas) return importarOS(ctx, arquivo, { abasEscolhidas: res.refazerAbas, abasLidas: abas });
   const { porSala, escolhidas } = res;
   delete res.porSala; delete res.escolhidas;
-  const tela = (e, nome) => novaTela(ctx, { nome, painel: e.painel, montagem: e.montagem, modo: e.t.modo, largura_m: e.t.largura_m, altura_m: e.t.altura_m });
+  const tela = (e, nome) => novaTela(ctx, Object.assign({ nome, painel: e.painel, montagem: e.montagem, modo: e.t.modo, largura_m: e.t.largura_m, altura_m: e.t.altura_m }, e.palco ? { palco: e.palco } : {}));
   // anotações: outros itens de vídeo e o que a OS pede de painel e não entrou (P1 sublocado, desmarcado)
   const usadas = new Set(escolhidas.map(e => e.t));
   const fora = info.telas.filter(t => !usadas.has(t));

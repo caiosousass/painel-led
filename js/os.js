@@ -262,6 +262,16 @@ function medidaDoTexto(texto) {
   return { largura_m: w, altura_m: h };
 }
 
+/* "Painel sobre o palco", "em cima do palco de 0,60 m", "palco 60 cm" → { altura_m } (null se não diz) */
+export function palcoDoTexto(texto) {
+  const t = semAcento(texto);
+  if (!/(sobre|em cima d)[oa]? ?(o |do )?palco|\bno palco\b/.test(t)) return null;
+  const m = t.match(/palco[^\d]{0,12}(\d+(?:[.,]\d+)?)\s*(cm|m)\b/);
+  let h = m ? numBR(m[1]) : null;
+  if (h != null && m[2] === 'cm') h = h / 100;
+  return { altura_m: h > 0 && h < 3 ? +h.toFixed(2) : null };
+}
+
 function montagemDoTexto(texto) {
   const t = semAcento(texto);
   if (/^(\S+\s+)?tote[mn]/.test(t)) return 'totem';
@@ -394,6 +404,7 @@ export function interpretarOS(abas, catalogo, opts = {}) {
       // o pitch que a OS pede quando a casa não tem (P1, P1.9…): a tela vem desmarcada no importar
       const pitch = painel ? null : ((b.replace(/\(\s*(solicitad|no lugar)[^)]*\)/gi, '').match(/\bp\s?(\d(?:[.,]\d{1,2})?)\b/i) || [])[1] || null);
       const montagem = montagemDoTexto(b);
+      const palco = montagem === 'chao' ? palcoDoTexto(b) : null;
       const copias = quantasTelas(b, qtd, med);
       for (let i = 0; i < copias; i++) {
         out.telas.push({
@@ -401,7 +412,7 @@ export function interpretarOS(abas, catalogo, opts = {}) {
           sala: sala ? nomeSala(sala) : '',
           // nome dentro da sublista da sala ("Totem 1", "Verticais laterais 2")
           nome_curto: descritorDoTexto(b) || ({ totem: 'Totem', balcao: 'Balcão', aereo: 'Painel aéreo' }[montagem] || 'Painel'),
-          painel, montagem, suposto, pitch_os: pitch ? 'P' + pitch.replace(',', '.') : null,
+          painel, montagem, palco, suposto, pitch_os: pitch ? 'P' + pitch.replace(',', '.') : null,
           modo: med ? 'medida' : 'gabinetes',
           largura_m: med ? med.largura_m : null, altura_m: med ? med.altura_m : null,
           texto: b, qtd_os: qtd

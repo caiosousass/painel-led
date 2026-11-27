@@ -42,6 +42,8 @@ equipe usar junto — e o administrador ver de qualquer lugar — ligue o modo o
      primeiro em Listas, com o alfinete, para a equipe toda (um evento sobe se alguma sala dele estiver fixada).
    - **Estrutura e palco (a mesma regra do Projetech Calculator)**: em cada tela no chão, marque se o painel
      está **em cima do palco** (altura, fundo e se a mão francesa apoia no palco ou sai do chão, atrás dele).
+     Já dá para escolher ao **importar a OS**: *No chão*, *Sobre o palco · mão francesa no chão* ou *Sobre o palco ·
+     mão francesa no palco*, com a altura do palco (se a OS diz "sobre palco de 0,60 m", já vem marcado).
      A mão francesa empilha 1,92 / 1,44 / 0,96 até o mais perto do topo sem passar; fileiras nas emendas, de
      1,5 em 1,5 m e nas pontas; **1 peso por metro** de altura por fileira; a partir de **4,5 m** a 1,92 da
      base vai em **segunda linha** (dobrada para trás).

@@ -261,3 +261,12 @@ test('abas: alternativas ("Opção 01 | Opção 02") só a confirmada ou a prime
   assert.deepEqual(nomes([rep, { ...rep }]), ['Extras - A&C - RX']);
   assert.deepEqual(abasDaOS([aba('Opção 01'), aba('Opção 02')], ['Opção 02']).map(a => a.nome), ['Opção 02']); // escolha à mão manda
 });
+
+test('palco na OS: "sobre o palco de 0,60 m" já vem marcado na importação', async () => {
+  const { palcoDoTexto } = await import('../js/os.js');
+  assert.deepEqual(palcoDoTexto('Painel de LED P2.9 6 x 3,5 m sobre palco de 0,60 m'), { altura_m: 0.6 });
+  assert.deepEqual(palcoDoTexto('Painel em cima do palco 80cm'), { altura_m: 0.8 });
+  assert.deepEqual(palcoDoTexto('Painel de LED sobre o palco'), { altura_m: null });
+  assert.equal(palcoDoTexto('Painel de LED Absen Indoor P2.9 mm - 15m x 2m'), null);
+  assert.equal(palcoDoTexto('Painel de LED para fundo de palco 8 x 4 m'), null);   // "fundo de palco" não é "sobre o palco"
+});
