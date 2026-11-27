@@ -103,6 +103,8 @@ export function ligar(el, ctx) {
       const alvo = destino() === 'nova' ? null : ctx.lista(destino());
       const antigas = new Map(((alvo && alvo.telas) || []).filter(t => t.calc_uid).map(t => [t.calc_uid, t]));
       const telas = [];
+      // o lugar de cada tela no palco do Calculator (borda esquerda, em metros): a mais à esquerda vira o 0
+      const xs = d.telas.map(t => +t.pos_x).filter(Number.isFinite), x0 = xs.length ? Math.min(...xs) : 0;
       d.telas.forEach((t, i) => {
         if (!casos[i]) return;
         const item = ctx.item(casos[i]);
@@ -112,6 +114,7 @@ export function ligar(el, ctx) {
           id: velha ? velha.id : ctx.novoId(), calc_uid: t.uid || null, nome: t.nome || '', painel: casos[i],
           modo: 'medida', largura_m: +(t.colunas * (+pl.larg_m || +t.larg_m || 0.5)).toFixed(3), altura_m: +(t.linhas * (+pl.alt_m || +t.alt_m || 0.5)).toFixed(3),
           colunas: null, linhas: null, m2: null, gabinetes: null,
+          ...(Number.isFinite(+t.pos_x) && t.pos_x !== null ? { pos: { x: +(+t.pos_x - x0).toFixed(2) } } : velha && velha.pos ? { pos: velha.pos } : {}),
           montagem: t.montagem || 'chao',
           palco: t.palco && t.palco.sobre ? { sobre: true, altura_m: t.palco.altura_m, fundo_m: t.palco.fundo_m || null, mf: t.palco.mf === 'palco' ? 'palco' : 'chao' } : { sobre: false, altura_m: null, fundo_m: null, mf: 'chao' },
           // o cabeamento é o do Calculator; o resto (backup, controladora, limites) continua o que a sala tinha

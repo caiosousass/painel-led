@@ -38,8 +38,9 @@ function cena(ps) {
   return its;
 }
 function limites(its, modo) {
-  const minX = Math.min(0, ...its.map(o => o.x)), maxX = Math.max(1, ...its.map(o => o.x + o.w));
-  const maxTop = Math.max(1, ...its.map(o => o.base + o.h));
+  const comPessoa = modo === 'paineis';
+  const minX = Math.min(0, ...its.map(o => o.x)), maxX = Math.max(1, ...its.map(o => o.x + o.w)) + (comPessoa ? 1.6 : 0);
+  const maxTop = Math.max(comPessoa ? 1.75 : 1, ...its.map(o => o.base + o.h));
   const u = Math.max(maxX - minX, maxTop * 2.2) / 100;   // unidade de traço e letra
   const mx = Math.max(0.6, u * 6);
   // o nome de cada tela fica em cima dela e não pode sair do quadro
@@ -60,16 +61,63 @@ function iconePadrao(inicio, sentido) {
     <circle cx="${c(sx)}" cy="${c(sy)}" r="3.4" fill="#22c55e"/><circle cx="${c(ex)}" cy="${c(ey)}" r="3.4" fill="#ef4444"/></svg>`;
 }
 
+
+/* A pessoa de referência (1,70 m) — o mesmo boneco do Projetech Calculator: tudo sai da altura (cabeça 0,140,
+ * ombro 0,202, quadril 0,486…), meio corpo desenhado e espelhado, a roupa recortada pelo contorno.
+ * Em metros: pés no chão (y = 0), à esquerda em x. */
+function pessoaSvg(x, H) {
+  const f = n => +n.toFixed(4), PEL = '#c3cbe4', MAO = '#aab4d5', CAB = '#49527a', CAM = '#8e9ac4', CAL = '#5e6a93', SAP = '#414a6e', LOG = '#e8ecf8';
+  const perW = H * 0.34, cx = x + perW / 2, topo = -H, U = u => cx + u * H, V = v => topo + v * H;
+  const cbW = 0.051, cbH = 0.140, pesc = 0.030, om = 0.115, omY = 0.202, cint = 0.072, qd = 0.098, jl = 0.056, tz = 0.036, peF = 0.058, dQ = 0.007, dT = 0.018;
+  const meio = [
+    ['M', [0, 0]], ['C', [cbW * 0.58, 0], [cbW, cbH * 0.22], [cbW, cbH * 0.48]], ['C', [cbW, cbH * 0.73], [cbW * 0.79, cbH * 0.93], [cbW * 0.54, cbH]],
+    ['C', [pesc, cbH + 0.012], [pesc, cbH + 0.022], [pesc, cbH + 0.032]], ['C', [om * 0.45, cbH + 0.040], [om * 0.78, omY - 0.026], [om * 0.96, omY]],
+    ['C', [om + 0.009, omY + 0.016], [om + 0.006, 0.292], [om - 0.001, 0.350]], ['C', [om - 0.005, 0.398], [om - 0.011, 0.432], [om - 0.015, 0.452]],
+    ['C', [om - 0.013, 0.482], [om - 0.035, 0.486], [om - 0.037, 0.456]], ['C', [om - 0.039, 0.420], [om - 0.035, 0.382], [om - 0.033, 0.344]],
+    ['C', [om - 0.031, 0.302], [om - 0.033, 0.268], [om - 0.036, 0.246]], ['C', [cint + 0.002, 0.290], [cint - 0.002, 0.330], [cint, 0.364]],
+    ['C', [cint + 0.006, 0.412], [qd - 0.004, 0.444], [qd, 0.486]], ['C', [qd - 0.002, 0.548], [jl + 0.026, 0.618], [jl + 0.016, 0.688]],
+    ['C', [jl + 0.009, 0.726], [jl + 0.004, 0.760], [jl, 0.796]], ['C', [jl - 0.004, 0.848], [tz + 0.004, 0.900], [tz, 0.944]],
+    ['L', [tz + 0.001, 0.976]], ['L', [peF, 0.990]], ['L', [peF, 0.998]], ['L', [dT - 0.002, 0.998]], ['L', [dT, 0.976]], ['L', [dT + 0.001, 0.944]],
+    ['C', [dT, 0.880], [dQ + 0.005, 0.760], [dQ + 0.003, 0.650]], ['L', [dQ, 0.512]], ['L', [0, 0.504]]
+  ];
+  const lado = meio.map(g => g[0] + g.slice(1).map(p => f(cx + p[0] * H) + ' ' + f(V(p[1]))).join(' ')).join('');
+  let volta = '';
+  for (let i = meio.length - 1; i >= 1; i--) {
+    const g = meio[i], ant = meio[i - 1][meio[i - 1].length - 1], P = p => f(cx - p[0] * H) + ' ' + f(V(p[1]));
+    volta += g[0] === 'C' ? 'C' + P(g[2]) + ' ' + P(g[1]) + ' ' + P(ant) : 'L' + P(ant);
+  }
+  const faixa = (v1, v2, cor) => `<rect x="${f(U(-0.16))}" y="${f(V(v1))}" width="${f(0.32 * H)}" height="${f((v2 - v1) * H)}" fill="${cor}"/>`;
+  const cw = cbW * 1.06;
+  const cabelo = `M${f(U(-cw * 1.3))} ${f(V(-0.030))}L${f(U(cw * 1.3))} ${f(V(-0.030))}L${f(U(cw * 1.3))} ${f(V(0.090))}C${f(U(cw * 0.5))} ${f(V(0.030))} ${f(U(-cw * 0.5))} ${f(V(0.030))} ${f(U(-cw * 1.3))} ${f(V(0.090))}Z`;
+  const camisa = `M${f(U(-0.16))} ${f(V(0.174))}L${f(U(-0.16))} ${f(V(0.452))}L${f(U(0.16))} ${f(V(0.452))}L${f(U(0.16))} ${f(V(0.174))}L${f(U(0.046))} ${f(V(0.174))}C${f(U(0.034))} ${f(V(0.216))} ${f(U(-0.034))} ${f(V(0.216))} ${f(U(-0.046))} ${f(V(0.174))}Z`;
+  const lw = 0.055 * H, k = lw / 697, R = v => f(v * k), lx = u => f(cx + (u - 348.5) * k), ly = v => f(V(0.268) + (v - 417) * k);
+  const logo = `<circle cx="${lx(350)}" cy="${ly(350)}" r="${R(285)}" fill="none" stroke="${LOG}" stroke-width="${R(90)}"/><circle cx="${lx(350)}" cy="${ly(350)}" r="${R(155)}" fill="${LOG}"/><circle cx="${lx(108)}" cy="${ly(725)}" r="${R(86)}" fill="${LOG}"/>`;
+  return `<g class="mt-pessoa" pointer-events="none"><clipPath id="mtPessoaClip"><path d="${lado + volta}Z"/></clipPath><g clip-path="url(#mtPessoaClip)">`
+    + faixa(0, 1, PEL) + `<path d="${cabelo}" fill="${CAB}"/><path d="${camisa}" fill="${CAM}"/>` + faixa(0.452, 0.5, CAM) + faixa(0.494, 0.95, CAL) + faixa(0.944, 1, SAP)
+    + `<ellipse cx="${f(U(0.088))}" cy="${f(V(0.460))}" rx="${f(0.017 * H)}" ry="${f(0.022 * H)}" fill="${MAO}"/><ellipse cx="${f(U(-0.088))}" cy="${f(V(0.460))}" rx="${f(0.017 * H)}" ry="${f(0.022 * H)}" fill="${MAO}"/>`
+    + logo + '</g></g>';
+}
+// cotas no jeito do Calculator: linha fina com os "tracinhos" nas pontas e o texto na cor das cotas
+const COTA = '#93a0c7';
+function cotaH(y, x1, x2, txt, u) {
+  const t = u * 0.9;
+  return `<g class="mt-cota" pointer-events="none"><line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${COTA}" stroke-width="${u * 0.16}"/><line x1="${x1}" y1="${y - t}" x2="${x1}" y2="${y + t}" stroke="${COTA}" stroke-width="${u * 0.16}"/><line x1="${x2}" y1="${y - t}" x2="${x2}" y2="${y + t}" stroke="${COTA}" stroke-width="${u * 0.16}"/><text x="${(x1 + x2) / 2}" y="${y - u * 0.9}" font-size="${u * 2}" text-anchor="middle" fill="${COTA}">${txt}</text></g>`;
+}
+function cotaV(x, y1, y2, txt, u, lado = -1) {
+  const t = u * 0.9, my = (y1 + y2) / 2, tx = x + lado * u * 1.1;
+  return `<g class="mt-cota" pointer-events="none"><line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${COTA}" stroke-width="${u * 0.16}"/><line x1="${x - t}" y1="${y1}" x2="${x + t}" y2="${y1}" stroke="${COTA}" stroke-width="${u * 0.16}"/><line x1="${x - t}" y1="${y2}" x2="${x + t}" y2="${y2}" stroke="${COTA}" stroke-width="${u * 0.16}"/><text x="${tx}" y="${my}" font-size="${u * 2}" text-anchor="middle" fill="${COTA}" transform="rotate(-90 ${tx} ${my})">${txt}</text></g>`;
+}
+
 /* o desenho da sala; temp: { id → plano provisório } enquanto se desenha à mão */
 function svgSala(its, modo, temp, fixo, ps) {
   if (!its.length) return '<div class="mt-vazio">Ponha uma tela com painel e medida (L × A) para montar a sala.</div>';
   const L = fixo || limites(its, modo), u = L.u, out = [];   // fixo: o enquadramento não muda no meio de um arrasto
   // chão e régua em metros
-  out.push(`<line x1="${L.x0}" y1="0" x2="${L.x1}" y2="0" stroke="#94a3b8" stroke-width="${u * 0.35}"/>`);
+  out.push(`<line x1="${L.x0}" y1="0" x2="${L.x1}" y2="0" stroke="#3a4670" stroke-width="${u * 0.35}"/>`);
   const passo = L.x1 - L.x0 > 40 ? 5 : L.x1 - L.x0 > 16 ? 2 : 1;
   for (let m = Math.ceil(L.x0 / passo) * passo; m <= L.x1; m += passo) {
-    out.push(`<line x1="${m}" y1="0" x2="${m}" y2="${u * 1.6}" stroke="#94a3b8" stroke-width="${u * 0.2}"/>`);
-    out.push(`<text x="${m}" y="${u * 4.6}" font-size="${u * 2.4}" text-anchor="middle" fill="#64748b">${m} m</text>`);
+    out.push(`<line x1="${m}" y1="0" x2="${m}" y2="${u * 1.6}" stroke="#3a4670" stroke-width="${u * 0.2}"/>`);
+    out.push(`<text x="${m}" y="${u * 4.6}" font-size="${u * 2.4}" text-anchor="middle" fill="#5f6b93">${m} m</text>`);
   }
   for (const o of its) {
     const pl = (temp && temp[o.t.id]) || o.pl;
@@ -77,16 +125,19 @@ function svgSala(its, modo, temp, fixo, ps) {
     const sel = est.sel === o.t.id;
     out.push(`<g data-tela="${o.t.id}">`);
     if (o.base > 0) {
-      out.push(`<rect x="${o.x - u * 2}" y="${-o.base}" width="${o.w + u * 4}" height="${o.base}" fill="#cbd5e1"/>`);
-      out.push(`<text x="${o.x + o.w / 2}" y="${-o.base / 2 + u}" font-size="${Math.min(u * 2.2, o.base * 0.6)}" text-anchor="middle" fill="#475569">palco ${n2(o.base)} m</text>`);
+      const sx = o.x - 0.3, sw = o.w + 0.6, deck = Math.min(o.base * 0.45, Math.max(u * 0.8, 0.1)), legW = Math.max(u * 0.3, 0.09);
+      out.push(`<rect x="${sx}" y="${-o.base}" width="${sw}" height="${deck}" rx="${u * 0.3}" fill="#4a5578" stroke="#5f6b93" stroke-width="${u * 0.15}"/>`);
+      const passo = [1, 2, 5, 10].find(p => p / (L.x1 - L.x0) > 0.015) || 10;
+      for (let m = 0; m <= sw + 1e-6; m += passo) out.push(`<rect x="${Math.min(sx + m, sx + sw - legW)}" y="${-o.base + deck}" width="${legW}" height="${o.base - deck}" fill="#39425f"/>`);
+      out.push(cotaV(o.x - u * 1.8, -o.base, 0, n2(o.base) + ' m', u));
     }
     const sinal = modo === 'sinal' || modo === 'processamento', energia = modo === 'energia', colorido = sinal || energia;
     const cor = new Map();
     (sinal ? pl.dados.portas : energia ? pl.energia.circuitos : []).forEach((p, i) => p.caminho.forEach(([c, r]) => cor.set(c + ',' + r, i)));
     for (let c = 0; c < pl.colunas; c++) for (let r = 0; r < pl.linhas; r++) {
       const i = cor.get(c + ',' + r);
-      const fill = !colorido ? '#1f2937' : i == null ? '#e5e7eb' : Cab.CORES_PORTA[i % Cab.CORES_PORTA.length];
-      out.push(`<rect x="${o.x + c * cw}" y="${y0 + r * ch}" width="${cw}" height="${ch}" fill="${fill}" stroke="${colorido ? '#ffffff' : '#4b5563'}" stroke-width="${m * 0.03}"/>`);
+      const fill = !colorido ? 'rgba(61,123,255,.16)' : i == null ? '#2a3557' : Cab.CORES_PORTA[i % Cab.CORES_PORTA.length];
+      out.push(`<rect x="${o.x + c * cw}" y="${y0 + r * ch}" width="${cw}" height="${ch}" fill="${fill}" stroke="${colorido ? '#121a30' : 'rgba(61,123,255,.38)'}" stroke-width="${m * 0.03}"/>`);
     }
     if (energia) {
       // o caminho do powercon de cada circuito (amarelo) e o número dele
@@ -124,9 +175,19 @@ function svgSala(its, modo, temp, fixo, ps) {
         out.push(`<text x="${sx}" y="${sy + rr * 0.38}" font-size="${rr * 1.05}" font-weight="700" text-anchor="middle" fill="#000000">${p.n}</text>`);
       }
     }
-    out.push(`<rect x="${o.x}" y="${y0}" width="${o.w}" height="${o.h}" fill="none" stroke="${sel ? '#0ea5e9' : '#64748b'}" stroke-width="${sel ? u * 0.6 : u * 0.2}"/>`);
-    out.push(`<text x="${o.x + o.w / 2}" y="${y0 - u * 1.8}" font-size="${u * 2.6}" font-weight="700" text-anchor="middle" fill="${sel ? '#0369a1' : '#334155'}">${esc(o.t.nome || 'Tela')} · ${n2(o.w)} × ${n2(o.h)} m</text>`);
+    out.push(`<rect x="${o.x}" y="${y0}" width="${o.w}" height="${o.h}" rx="${u * 0.4}" fill="none" stroke="${sel ? '#9db8ff' : '#3d7bff'}" stroke-width="${sel ? u * 0.7 : u * 0.35}"/>`);
+    const pxW = pl.colunas * (pl.px_l || 0), pxH = pl.linhas * (pl.px_a || 0);
+    out.push(cotaH(y0 - u * 1.6, o.x, o.x + o.w, `${n2(o.w)} m${pxW ? ' — ' + fmt(pxW) + ' px' : ''}`, u));
+    out.push(`<text x="${o.x + o.w / 2}" y="${y0 - u * 5.4}" font-size="${u * 2.5}" font-weight="700" text-anchor="middle" fill="${sel ? '#cfe0ff' : '#e5e9f5'}">${esc(o.t.nome || 'Tela')}</text>`);
+    // altura à esquerda (se o vizinho deixa espaço)
+    const viz = its.some(q => q !== o && q.x + q.w > o.x - u * 4.5 && q.x < o.x);
+    if (!viz) out.push(cotaV(o.x - u * 1.8, y0, y0 + o.h, `${n2(o.h)} m${pxH ? ' — ' + fmt(pxH) + ' px' : ''}`, u));
     out.push('</g>');
+  }
+  if (modo === 'paineis') {
+    const xP = Math.max(...its.map(o => o.x + o.w)) + 0.8;
+    out.push(pessoaSvg(xP, 1.7));
+    out.push(cotaV(xP + 1.7 * 0.34 + u * 1.8, -1.7, 0, '1,70 m', u, 1));
   }
   if (modo === 'energia' && ps) out.push(energiaSvg(its, ps, L));
   if (modo === 'processamento' && ps) out.push(processamentoSvg(its, ps, L));
@@ -149,7 +210,7 @@ function energiaSvg(its, ps, L) {
     xr.set(r.n, x);
     const marcada = est.selE && est.selE.tipo === 'regua' && est.selE.id === r.id;
     const kw = r.w / 1000, lim = (ps.telas[r.tela] ? +ps.telas[r.tela].cfg.kw_regua || 7.5 : 7.5);
-    for (const [sx, sy] of saidas) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yR}" stroke="${marcada ? '#0ea5e9' : '#475569'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
+    for (const [sx, sy] of saidas) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yR}" stroke="${marcada ? '#0ea5e9' : '#93a0c7'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
     out.push(`<g data-regua="${esc(r.id)}" style="cursor:pointer"><rect x="${x - wR / 2}" y="${yR}" width="${wR}" height="${hR}" rx="${u * 0.6}" fill="${kw > lim + 1e-9 ? '#dc2626' : '#2563eb'}" stroke="${marcada ? '#0ea5e9' : '#1e3a8a'}" stroke-width="${u * (marcada ? 0.7 : 0.25)}"/>`
       + `<text x="${x}" y="${yR + hR * 0.68}" font-size="${u * 2.3}" font-weight="700" text-anchor="middle" fill="#ffffff">R${r.n}</text></g>`);
   }
@@ -163,9 +224,9 @@ function energiaSvg(its, ps, L) {
   if (sobra > 0) ks.forEach(q => { q.x -= sobra; });
   for (const { k, x } of ks) {
     const marcado = est.selE && est.selE.tipo === 'rack' && est.selE.id === k.id;
-    for (const q of k.reguas) { const rx = xr.get(q.rg); if (rx != null) out.push(`<line x1="${rx}" y1="${yR + hR}" x2="${x}" y2="${yK}" stroke="#1f2937" stroke-width="${u * 0.35}"/>`); }
+    for (const q of k.reguas) { const rx = xr.get(q.rg); if (rx != null) out.push(`<line x1="${rx}" y1="${yR + hR}" x2="${x}" y2="${yK}" stroke="#93a0c7" stroke-width="${u * 0.35}"/>`); }
     const saidasK = Cab.RACKS[k.tipo] || 9, cheio = k.reguas.length > saidasK;
-    out.push(`<g data-rack="${esc(k.id)}" style="cursor:pointer"><rect x="${x - wK / 2}" y="${yK}" width="${wK}" height="${hK}" rx="${u * 0.8}" fill="#3f4652" stroke="${marcado ? '#0ea5e9' : cheio ? '#dc2626' : '#111827'}" stroke-width="${u * (marcado ? 0.8 : 0.3)}"/>`
+    out.push(`<g data-rack="${esc(k.id)}" style="cursor:pointer"><rect x="${x - wK / 2}" y="${yK}" width="${wK}" height="${hK}" rx="${u * 0.8}" fill="#3f4652" stroke="${marcado ? '#0ea5e9' : cheio ? '#dc2626' : '#7c88b0'}" stroke-width="${u * (marcado ? 0.8 : 0.3)}"/>`
       + `<text x="${x}" y="${yK + hK * 0.45}" font-size="${u * 2.4}" font-weight="700" text-anchor="middle" fill="#ffffff">Rack ${k.n}</text>`
       + `<text x="${x}" y="${yK + hK * 0.8}" font-size="${u * 1.9}" text-anchor="middle" fill="#cbd5e1">${saidasK} saídas · ${k.reguas.length} régua${k.reguas.length === 1 ? '' : 's'}</text></g>`);
   }
@@ -191,14 +252,14 @@ function processamentoSvg(its, ps, L) {
   for (const { c, sa, x } of pos) {
     const C = Cab.CONTROLADORAS[c.tipo], marcada = est.selP && est.selP.tipo === 'ctrl' && est.selP.id === c.id;
     const passa = c.px > C.px || c.usadas > C.portas;
-    for (const [sx, sy] of sa) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yC}" stroke="${marcada ? '#0ea5e9' : '#475569'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
-    out.push(`<line x1="${x}" y1="${yC + hC}" x2="${xP}" y2="${yP}" stroke="#1f2937" stroke-width="${u * 0.3}"/>`);
-    out.push(`<g data-ctrl="${esc(c.id)}" style="cursor:pointer"><rect x="${x - wC / 2}" y="${yC}" width="${wC}" height="${hC}" rx="${u * 0.6}" fill="#1f2937" stroke="${marcada ? '#0ea5e9' : passa ? '#dc2626' : '#0b0f17'}" stroke-width="${u * (marcada || passa ? 0.7 : 0.25)}"/>`
+    for (const [sx, sy] of sa) out.push(`<line x1="${sx}" y1="${sy}" x2="${x}" y2="${yC}" stroke="${marcada ? '#0ea5e9' : '#93a0c7'}" stroke-width="${u * (marcada ? 0.45 : 0.22)}"/>`);
+    out.push(`<line x1="${x}" y1="${yC + hC}" x2="${xP}" y2="${yP}" stroke="#93a0c7" stroke-width="${u * 0.3}"/>`);
+    out.push(`<g data-ctrl="${esc(c.id)}" style="cursor:pointer"><rect x="${x - wC / 2}" y="${yC}" width="${wC}" height="${hC}" rx="${u * 0.6}" fill="#1f2937" stroke="${marcada ? '#0ea5e9' : passa ? '#dc2626' : '#7c88b0'}" stroke-width="${u * (marcada || passa ? 0.7 : 0.25)}"/>`
       + `<text x="${x}" y="${yC + hC * 0.48}" font-size="${u * 2.1}" font-weight="700" text-anchor="middle" fill="#ffffff">${esc(C.nome)} ${c.n}</text>`
       + `<text x="${x}" y="${yC + hC * 0.85}" font-size="${u * 1.45}" text-anchor="middle" fill="${passa ? '#fca5a5' : '#93c5fd'}">${c.usadas}/${C.portas} saídas · ${n2(c.px / 1e6)} Mpx</text></g>`);
   }
   const marcadaP = est.selP && est.selP.tipo === 'proc';
-  out.push(`<g data-proc="1" style="cursor:pointer"><rect x="${xP - wP / 2}" y="${yP}" width="${wP}" height="${hP}" rx="${u * 0.9}" fill="#374151" stroke="${marcadaP ? '#0ea5e9' : '#111827'}" stroke-width="${u * (marcadaP ? 0.7 : 0.3)}"/>`
+  out.push(`<g data-proc="1" style="cursor:pointer"><rect x="${xP - wP / 2}" y="${yP}" width="${wP}" height="${hP}" rx="${u * 0.9}" fill="#374151" stroke="${marcadaP ? '#0ea5e9' : '#7c88b0'}" stroke-width="${u * (marcadaP ? 0.7 : 0.3)}"/>`
     + `<rect x="${xP - wP * 0.36}" y="${yP + hP * 0.2}" width="${wP * 0.34}" height="${hP * 0.55}" fill="#60a5fa"/>`
     + `<text x="${xP + wP * 0.2}" y="${yP + hP * 0.6}" font-size="${u * 2.1}" font-weight="700" text-anchor="middle" fill="#ffffff">${esc(ps.cfg.processadora || 'Processadora')}</text></g>`);
   return out.join('');

@@ -501,7 +501,8 @@ body.cheio-mt .mt-quadro{max-height:calc(100vh - 150px)}
 .proj-linha svg{width:18px;height:18px;flex:none}
 
 /* Montagem da sala (editor tipo SmartLCT) */
-.mt-quadro{background:#f8fafc;border-radius:10px;overflow:auto;max-height:70vh;border:1px solid var(--line)}
+.mt-card h2{white-space:nowrap}   /* o título não quebra no meio: os botões é que descem */
+.mt-quadro{background:#121a30;border-radius:12px;overflow:auto;max-height:70vh;border:1px solid #26325a}   /* o fundo da vista do Calculator */
 .mt-svg{width:100%;height:auto;min-height:220px;display:block;touch-action:pan-x pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
 .mt-svg.paineis{touch-action:pan-y}
 .mt-svg.pintando{touch-action:none;cursor:crosshair}

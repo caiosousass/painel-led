@@ -81,6 +81,10 @@ Antes: olhar a OS e a implantação → fazer a lista → fazer o projeto de AC 
 
 ## Montagem da sala (o editor, no jeito do SmartLCT da NovaStar)
 
+No visual do Projetech Calculator: fundo escuro, painéis em azul com as emendas dos gabinetes, cotas de
+largura e altura (m e px), palco praticável com os pés e a pessoa de 1,70 m para dar escala. A sala que vem do
+Calculator (*Gerar lista no Painel de LED*) chega com **cada tela no lugar dela no palco** (os mesmos vãos).
+
 No **Projeto da sala**, em cima, a sala vista de frente, em escala (zoom − / +):
 
 1. **Painéis** — arraste as telas para o lado para posicionar (fica gravado em metros da esquerda); a ordem da
