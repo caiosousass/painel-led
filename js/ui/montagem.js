@@ -257,7 +257,9 @@ function processamentoHtml(ctx, ps, pode) {
   const nomeTela = ti => (ps.telas[ti] && ps.telas[ti].nome) || 'Tela';
   const tot = Object.entries(ps.controladoras).map(([t, q]) => q + ' × ' + Cab.CONTROLADORAS[t].nome).join(' + ') || 'nenhuma';
   const resumo = `<p class="peq mut2" style="margin:0 0 8px">${ps.portas} porta${ps.portas === 1 ? '' : 's'} · ${tot}${ps.processamento.manual ? ' · <b>montagem sua</b>' : ' · sugestão do sistema'}</p>`;
-  const procIn = `<label class="campo" style="max-width:320px"><span>Processadora</span><input data-p="processadora" value="${B.esc(ps.cfg.processadora || '')}" placeholder="Ex.: VX1000" ${ro}></label>`;
+  const pa = ps.cfg.processadora || '', hs = ['H2', 'H5', 'H9', 'H15'];
+  const procIn = `<label class="campo" style="max-width:320px"><span>Processadora</span><select data-p="processadora" ${ro}>${[['', '— sem processadora —']].concat(hs.map(h => [h, 'Novastar ' + h])).concat(pa && !hs.includes(pa) ? [[pa, pa + ' (escrita antes)']] : [])
+    .map(([v, t]) => `<option value="${B.esc(v)}" ${v === pa ? 'selected' : ''}>${B.esc(t)}</option>`).join('')}</select></label>`;
   const opCtrls = atual => lista.map(c => `<option value="${B.esc(c.id)}" ${c.id === atual ? 'selected' : ''}>${Cab.CONTROLADORAS[c.tipo].nome} ${c.n} · ${c.usadas}/${Cab.CONTROLADORAS[c.tipo].portas}</option>`).join('')
     + Object.entries(Cab.CONTROLADORAS).map(([t, C]) => `<option value="__nova:${t}">+ Nova ${C.nome}</option>`).join('');
   const sel = est.selP;

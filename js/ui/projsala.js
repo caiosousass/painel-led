@@ -72,6 +72,64 @@ function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
   </div>`;
 }
 
+/* Arrastar os aparelhos (rack, controladoras/CVT, processadora) na prévia da folha: enquanto arrasta, a folha
+ * é refeita com o lugar novo (os cabos acompanham); ao soltar, o lugar fica gravado na sala
+ * (lista.projeto.layout[tipo da folha][aparelho] = frações da área de desenho). */
+function ligarArraste(el, ctx, lista, id) {
+  const caixa = el.querySelector('.pj-folha.pode');
+  if (!caixa) return;
+  const fs0 = folhasDaLista(ctx, lista, { hoje: ctx.hoje() });
+  const fi = Math.min(folhaVista.get(id) || 0, Math.max(0, fs0.length - 1)), folha = fs0[fi];
+  if (!folha) return;
+  const paraFolha = e => { const svg = caixa.querySelector('svg'), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  const comLayout = lay => Object.assign({}, lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: lay }) });
+  let arr = null, quadro = 0;
+  caixa.addEventListener('pointerdown', e => {
+    const alvo = e.target.closest('[data-alvo]');
+    if (!alvo || e.button > 0) return;
+    const p = paraFolha(e), x = +alvo.getAttribute('x'), y = +alvo.getAttribute('y'), w = +alvo.getAttribute('width');
+    const lay = JSON.parse(JSON.stringify((lista.projeto || {}).layout || {}));
+    arr = { chave: alvo.dataset.alvo, dx: p.x - (x + w / 2), dy: p.y - y, lay, mexeu: false };
+    caixa.setPointerCapture(e.pointerId);
+    caixa.classList.add('arrastando');
+    e.preventDefault();
+  });
+  caixa.addEventListener('pointermove', e => {
+    if (!arr) return;
+    const p = paraFolha(e), A = folha.area;
+    arr.lay[folha.tipo] = Object.assign({}, arr.lay[folha.tipo], {
+      [arr.chave]: { fx: +((p.x - arr.dx - A.x) / A.w).toFixed(4), fy: +((p.y - arr.dy - A.y) / A.h).toFixed(4) }
+    });
+    arr.mexeu = true;
+    if (!quadro) quadro = requestAnimationFrame(() => {
+      quadro = 0;
+      if (!arr) return;
+      const tmp = comLayout(arr.lay), f = folhasDaLista(ctx, tmp, { hoje: ctx.hoje() })[fi];
+      if (f) caixa.innerHTML = svgDaFolha(ctx, tmp, f, { alvos: true });
+    });
+  });
+  const soltar = async () => {
+    if (!arr) return;
+    const a = arr;
+    arr = null;
+    caixa.classList.remove('arrastando');
+    if (!a.mexeu) return;
+    Object.assign(lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: a.lay }) });
+    await ctx.D.salvar('listas', lista, { silencioso: true });
+    ctx.atualizar();
+  };
+  caixa.addEventListener('pointerup', soltar);
+  caixa.addEventListener('pointercancel', soltar);
+  const auto = el.querySelector('.pj-lay-auto');
+  if (auto) auto.onclick = async () => {
+    const lay = Object.assign({}, (lista.projeto || {}).layout || {});
+    delete lay[folha.tipo];
+    Object.assign(lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: lay }) });
+    await ctx.D.salvar('listas', lista, { silencioso: true });
+    ctx.atualizar();
+  };
+}
+
 export function render(ctx, [id]) {
   const { B, M } = ctx;
   const lista = ctx.lista(id);
@@ -114,7 +172,9 @@ export function render(ctx, [id]) {
 
   <div class="card"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
       <span class="dir">${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
-    ${folhas.length ? `<div class="proj-prev pj-folha">${svgDaFolha(ctx, lista, folhas[fi])}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
+    ${folhas.length ? `<div class="proj-prev pj-folha ${pode ? 'pode' : ''}">${svgDaFolha(ctx, lista, folhas[fi], { alvos: pode })}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
+    ${pode && folhas.length && folhas[fi].alvos.length ? `<div class="pj-arraste peq mut2">${B.ico('info')} Arraste o rack, as controladoras e a processadora na folha para mudar o lugar deles — os cabos acompanham.
+      ${Object.keys((((lista.projeto || {}).layout) || {})[folhas[fi].tipo] || {}).length ? '<button class="btn sm pj-lay-auto">Voltar ao automático</button>' : ''}</div>` : ''}
     <div class="pj-resumo">
       <span><b>${pl1(ps.portas, 'porta', 'portas')}</b></span><span><b>${pl1(ps.circuitos, 'circuito', 'circuitos')}</b></span>
       <span><b>${pl1(ps.reguas, 'régua', 'réguas')}</b></span><span><b>${racksTxt}</b>${ps.racks.length && sc.racks !== 'tela' && ps.telas.length > 1 ? ' (da sala)' : ''}</span>
@@ -162,6 +222,7 @@ export function ligar(el, ctx, [id]) {
     } catch (e) { B.toast(e.message, { tipo: 'erro' }); }
   };
   el.querySelectorAll('.folha-tab').forEach(b => { b.onclick = () => { folhaVista.set(id, +b.dataset.i); ctx.atualizar(); }; });
+  ligarArraste(el, ctx, lista, id);
 
   const pode = editavel(lista) && ctx.pode('listas');
   // a lista acompanha o projeto: sem nada separado, recalcula sozinha (regras novas, catálogo)

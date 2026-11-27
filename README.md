@@ -136,6 +136,10 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
 - Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer — embaixo do painel, a prolonga e o
   rack na metade da esquerda e a controladora → processadora (desenhadas) na da direita. Dá para pedir sempre
   separadas ou sempre juntas em *Energia e processamento da sala*.
+- **Arrastar na prancha**: na prévia das *Folhas do PDF*, arraste o rack, as controladoras/CVT e a processadora
+  para onde quiser — os cabos se refazem sozinhos e o lugar fica gravado na sala (vale no PDF). *Voltar ao
+  automático* desfaz. Um CVT4K-S para várias telas: em *Montagem → 4 · Processamento*, "+ Nova CVT4K-S" numa
+  porta e o mesmo CVT4K-S nas portas das outras telas.
 
 O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.
 
@@ -225,4 +229,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 73 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 74 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

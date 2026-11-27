@@ -31,7 +31,7 @@ export function folhasDaLista(ctx, lista, { hoje, inicio, total } = {}) {
   return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista) });
 }
 
-export function svgDaFolha(ctx, lista, folha) { return Cab.svg(folha, IMAGENS_SVG); }
+export function svgDaFolha(ctx, lista, folha, op) { return Cab.svg(folha, IMAGENS_SVG, op); }
 
 /* ---------------- PDF ---------------- */
 function carregarScript(src) {

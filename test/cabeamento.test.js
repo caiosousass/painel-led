@@ -174,3 +174,22 @@ test('série H: CVT10 / CVT4K-S como extensor de fibra, processadora H desenhada
   assert.equal(q('cvt4k-s'), 1);
   assert.equal(q('send-660'), 0);
 });
+
+test('prancha: aparelhos arrastados ficam onde o usuário pôs (frações da área), e os cabos vão junto', () => {
+  const cat = catalogoInicial();
+  const telas = [{ id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3 }];
+  const auto = Cab.folhasTecnicas(M.planoSala(telas, cat, { processadora: 'H9', folhas: 'separadas' }), { sala: 'S' }, {});
+  const sinal = auto.find(f => f.tipo === 'sinal');
+  assert.deepEqual(sinal.alvos.map(a => a.chave), ['ctrl:c:1', 'proc']);
+  assert.ok(auto.find(f => f.tipo === 'ac').alvos.every(a => a.chave.startsWith('rack:')));
+  const layout = { sinal: { proc: { fx: 0.1, fy: 0.75 } } };
+  const mov = Cab.folhasTecnicas(M.planoSala(telas, cat, { processadora: 'H9', folhas: 'separadas', layout }), { sala: 'S' }, {}).find(f => f.tipo === 'sinal');
+  const p = mov.alvos.find(a => a.chave === 'proc'), A = mov.area;
+  assert.ok(Math.abs(p.x + p.w / 2 - (A.x + 0.1 * A.w)) < 0.01);   // o centro onde foi posto
+  assert.ok(Math.abs(p.y - (A.y + 0.75 * A.h)) < 0.01);
+  // arrastada para fora: fica dentro da área de desenho
+  const fora = Cab.folhasTecnicas(M.planoSala(telas, cat, { processadora: 'H9', folhas: 'separadas', layout: { sinal: { proc: { fx: 1.4, fy: 0.99 } } } }), { sala: 'S' }, {}).find(f => f.tipo === 'sinal').alvos.find(a => a.chave === 'proc');
+  assert.ok(fora.x + fora.w <= A.x + A.w + 0.01 && fora.y + fora.h <= A.y + A.h + 0.01);
+  // a controladora não mexida continua no automático
+  assert.deepEqual(mov.alvos.find(a => a.chave === 'ctrl:c:1'), sinal.alvos.find(a => a.chave === 'ctrl:c:1'));
+});

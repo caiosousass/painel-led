@@ -817,7 +817,7 @@ export function desenhaProcessadoraH(P, mod, cx, y, w) {
 }
 
 /* desenha a sala na área; k = tamanho dos aparelhos e letras (o U da prancha). Devolve a escala (mm por m). */
-function salaTecnica(P, ps, area, modo, k) {
+function salaTecnica(P, ps, area, modo, k, alvos = []) {
   const its = ps.telas.map((it, ti) => ({ it, ti })).filter(o => o.it.pl);
   if (!its.length) return 0;
   // folha única ("AC e Sinal", sala pequena): os dois desenhos embaixo do painel — o rack na metade da
@@ -850,6 +850,17 @@ function salaTecnica(P, ps, area, modo, k) {
   const xMin = area.x, xMax = area.x + area.w, xMeio = (xMin + xMax) / 2;
   const acMin = xMin, acMax = juntas ? xMeio - 4 * k : xMax, siMin = juntas ? xMeio + 4 * k : xMin, siMax = xMax;
   const yBusAC = yBase + Math.min(8 * k, hBaixo * 0.15), yRack = yBase + hBaixo * 0.42;
+  // onde o usuário arrastou cada aparelho na prancha (frações da área de desenho, por tipo de folha);
+  // sem isso, o lugar automático. Os cabos são refeitos a partir do lugar.
+  const lay = (ps.cfg.layout && ps.cfg.layout[modo]) || {};
+  const doUsuario = (chave, x, y, w, h) => {
+    const p = lay[chave];
+    if (!p || !Number.isFinite(+p.fx) || !Number.isFinite(+p.fy)) return { x, y };
+    return {
+      x: Math.min(area.x + area.w - w / 2, Math.max(area.x + w / 2, area.x + +p.fx * area.w)),
+      y: Math.min(area.y + area.h - h, Math.max(yBase + 2 * k, area.y + +p.fy * area.h)), manual: true
+    };
+  };
   if (comAC) {
     // fino: o powercon de cada circuito descendo do painel até a prolonga Steck; grosso: a prolonga até o rack
     const fino = 0.24 * k, grosso = 0.6 * k, pw = 1.9 * k;
@@ -883,26 +894,30 @@ function salaTecnica(P, ps, area, modo, k) {
     espalhar(racks, rackW, acMin, acMax);
     const yTip = yBus + pw * 1.12;
     for (const rk of racks) {
-      const nS = RACKS[rk.tipo] || 9, w = rackH * larg(rk);
-      const socks = rackTecnico(P, rk.x, yR, w, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`, k);
+      const nS = RACKS[rk.tipo] || 9, w = rackH * larg(rk), chave = 'rack:' + (rk.id || rk.n);
+      const pr = doUsuario(chave, rk.x, yR, w, rackH * 1.14 + 4.5 * k);
+      rk.x = pr.x;
+      const yRk = Math.max(yTip + 3 * k, pr.y);
+      alvos.push({ chave, nome: 'Rack ' + rk.n, x: rk.x - w / 2, y: yRk, w, h: rackH * 1.14 + 4.5 * k });
+      const socks = rackTecnico(P, rk.x, yRk, w, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`, k);
       const lig = tomadasDoRack(rk.rs, socks, rk.x, w);
       // quem desce por cima: um nível de passagem para cada um, sem cruzar (o que vai mais longe passa mais alto)
       const dir = lig.filter(l => l.lado === 'cima' && l.s.x > l.r.xm + 0.3).sort((a, b) => a.r.xm - b.r.xm);
       const esq = lig.filter(l => l.lado === 'cima' && l.s.x < l.r.xm - 0.3).sort((a, b) => b.r.xm - a.r.xm);
       const niveis = Math.max(dir.length, esq.length);
-      const passo = Math.min(2 * k, (yR - yTip) / (niveis + 2));
-      dir.forEach((l, i) => { l.y = yR - passo * (1 + i); });
-      esq.forEach((l, i) => { l.y = yR - passo * (1 + i); });
+      const passo = Math.min(2 * k, (yRk - yTip) / (niveis + 2));
+      dir.forEach((l, i) => { l.y = yRk - passo * (1 + i); });
+      esq.forEach((l, i) => { l.y = yRk - passo * (1 + i); });
       for (const l of lig) {
         const { r, s: t } = l, m2 = t.m / 2;
         const pts = l.lado === 'esq' ? [[r.xm, yTip], [r.xm, t.y], [t.x - m2, t.y]]
           : l.lado === 'dir' ? [[r.xm, yTip], [r.xm, t.y], [t.x + m2, t.y]]
           : l.y != null ? [[r.xm, yTip], [r.xm, l.y], [t.x, l.y], [t.x, t.y - m2]]
-          : [[r.xm, yTip], [r.xm, l.y = (yTip + yR) / 2], [t.x, l.y], [t.x, t.y - m2]];
+          : [[r.xm, yTip], [r.xm, l.y = (yTip + yRk) / 2], [t.x, l.y], [t.x, t.y - m2]];
         P.push({ t: 'poly', pts, stroke: '#111111', sw: grosso });
       }
       // prolonga sem tomada livre (rack cheio): desce até o rack
-      for (const r of rk.rs) if (!lig.some(l => l.r === r)) P.push({ t: 'poly', pts: [[r.xm, yTip], [r.xm, yR]], stroke: '#111111', sw: grosso });
+      for (const r of rk.rs) if (!lig.some(l => l.r === r)) P.push({ t: 'poly', pts: [[r.xm, yTip], [r.xm, yRk]], stroke: '#111111', sw: grosso });
       for (const r of rk.rs) plugueSteck(P, r.xm, yBus, pw);
     }
   }
@@ -930,6 +945,13 @@ function salaTecnica(P, ps, area, modo, k) {
       return { c, x: (a + b) / 2, xb: (a + b) / 2 };
     });
     espalhar(ctrls, cW, siMin, siMax);
+    for (const c of ctrls) {
+      // a controladora automática é reconhecida pela tela e pela 1ª porta dela (o id muda quando outra tela ganha uma)
+      const s0 = c.c.saidas.find(Boolean), t0 = s0 && ps.telas[s0.ti];
+      c.chave = !c.c.manual && s0 ? 'ctrl:' + ((t0 && t0.tela && t0.tela.id) || s0.ti) + ':' + s0.n : 'ctrl:' + c.c.id;
+      const p = doUsuario(c.chave, c.x, yC, cW, 9 * k);
+      c.x = p.x; c.y = Math.max(yBusS + 3 * k, p.y);
+    }
     let baixoC = yC;   // onde acabam as controladoras e as legendas delas
     for (const cc of ctrls) {
       const c = cc, ct = cc.c, nome = (CONTROLADORAS[ct.tipo] || {}).nome || 'Controladora';
@@ -941,28 +963,34 @@ function salaTecnica(P, ps, area, modo, k) {
       const ult = ligs[ligs.length - 1];
       const nomes = seguidos ? [`P${ligs[0].i + 1}–P${ult.i + 1}: ${nomeT(ligs[0].p.ti)} cabos ${ligs[0].p.n}–${ult.p.n}`]
         : ligs.map(x => `P${x.i + 1}: ${nomeT(x.p.ti)} ${x.p.n}`);
-      if (c.xb != null) P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
+      if (c.xb != null) P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + c.y) / 2], [c.x, (yBusS + c.y) / 2], [c.x, c.y]], stroke: '#111827', sw: 0.3 * k });
       // o aparelho (MCTRL660, Taurus, CVT…) desenhado pela frente real dele
-      const d = desenhaControladora(P, ct.tipo, c.x, yC, cW);
+      const d = desenhaControladora(P, ct.tipo, c.x, c.y, cW);
       c.w = d.w; c.h = d.h;
       // as legendas ficam na largura da caixa: o cabo até a processadora sai pelo lado, sem passar por cima delas
-      P.push({ t: 'text', x: c.x, y: yC + d.h + 3.2 * k, txt: corta(`${nome} ${ct.n} · ${ct.usadas} porta${ct.usadas === 1 ? '' : 's'}`, cW * 0.95, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
-      if (nomes.length) P.push({ t: 'text', x: c.x, y: yC + d.h + 6 * k, txt: corta(nomes.join(' · '), cW * 0.95, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
-      baixoC = Math.max(baixoC, yC + d.h + (nomes.length ? 7 : 4.4) * k);
+      P.push({ t: 'text', x: c.x, y: c.y + d.h + 3.2 * k, txt: corta(`${nome} ${ct.n} · ${ct.usadas} porta${ct.usadas === 1 ? '' : 's'}`, cW * 0.95, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
+      if (nomes.length) P.push({ t: 'text', x: c.x, y: c.y + d.h + 6 * k, txt: corta(nomes.join(' · '), cW * 0.95, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
+      baixoC = Math.max(baixoC, c.y + d.h + (nomes.length ? 7 : 4.4) * k);
+      const la = Math.max(d.w, cW * 0.95);
+      alvos.push({ chave: c.chave, nome: nome + ' ' + ct.n, x: c.x - la / 2, y: c.y, w: la, h: d.h + (nomes.length ? 7 : 4.4) * k });
     }
     const proc = ps.cfg.processadora || (geo.length > 1 ? 'Processadora' : '');
     if (proc) {
       // processadora H: o desenho da série H, na altura do modelo (encolhe se não couber até o carimbo)
       const mod = modeloProcessadora(proc), alt = mod ? PROCESSADORAS[mod].alt : 13 / 34;
-      const yP = baixoC + 5 * k, livre = Math.max(8 * k, yBase + hBaixo - yP - 6 * k);
+      let yP = baixoC + 5 * k;
+      const livre = Math.max(8 * k, yBase + hBaixo - yP - 6 * k);
       const pW = Math.max(12 * k, Math.min(34 * k, livre / alt)), pH = pW * alt;
       const xRef = juntas && ctrls.length ? ctrls.reduce((a, c) => a + c.x, 0) / ctrls.length : (geo[0].x0 + geo[geo.length - 1].x0 + geo[geo.length - 1].w) / 2;
-      const xP = Math.min(siMax - pW / 2, Math.max(siMin + pW / 2, xRef));
-      const yJ = (baixoC + yP) / 2;
+      let xP = Math.min(siMax - pW / 2, Math.max(siMin + pW / 2, xRef));
+      const pp = doUsuario('proc', xP, yP, pW, pH + 6 * k);
+      xP = pp.x; yP = pp.y;
+      alvos.push({ chave: 'proc', nome: 'Processadora', x: xP - pW / 2, y: yP, w: pW, h: pH + 6 * k });
+      const yJ = pp.manual ? yP - 3 * k : (baixoC + yP) / 2;
       // cada controladora liga pelo lado (o cabo não passa por cima das legendas); a fibra (CVT) é preta e
       // mais grossa, com "fibra" escrito ao lado
       for (const c of ctrls) {
-        const fib = !!(CONTROLADORAS[c.c.tipo] || {}).fibra, ym = yC + c.h / 2, xl = c.x + cW * 0.5 + 0.8 * k;
+        const fib = !!(CONTROLADORAS[c.c.tipo] || {}).fibra, ym = c.y + c.h / 2, xl = c.x + cW * 0.5 + 0.8 * k;
         P.push({ t: 'poly', pts: [[c.x + c.w / 2, ym], [xl, ym], [xl, yJ], [xP, yJ]], stroke: '#111111', sw: (fib ? 0.75 : 0.3) * k });
         if (fib) P.push({ t: 'text', x: xl + 0.9 * k, y: (ym + yJ) / 2 + 1.2 * k, txt: 'fibra', size: 4.4 * k, bold: true, color: '#111111' });
       }
@@ -1091,7 +1119,8 @@ export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato
   const sub = descricaoDasTelas(ps, sala);
   if (sub) P.push({ t: 'text', x: MG + 4 * U, y: MG + 9.8 * U, txt: corta(sub, PW - 2 * MG - 8 * U, 7 * U), size: 7 * U, color: '#787878' });
   const area = { x: MG + 6 * U, y: MG + 13 * U, w: PW - 2 * MG - 12 * U, h: Q.drawBottom - (MG + 13 * U) };
-  const esc = salaTecnica(P, ps, area, modo, U);
+  const alvos = [];
+  const esc = salaTecnica(P, ps, area, modo, U, alvos);
   const sem = ps.telas.filter(it => !it.pl).map(it => it.nome || 'tela');
   if (sem.length) P.push({ t: 'text', x: area.x, y: Q.drawBottom - 1 * U, txt: `Sem desenho (informadas em m² ou nº de gabinetes): ${sem.join(', ')}`, size: 6.5 * U, color: '#92400e' });
 
@@ -1122,7 +1151,7 @@ export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato
     dir: [['Data de montagem', dataCurta(meta.montagem)], ['Data de emissão', dataCurta(meta.emissao)], ['Cliente', meta.cliente], ['Agência', meta.agencia]],
     com: ['Nº O.S', meta.os], numero, total, razaoLogo
   });
-  return { tipo: modo, prims: P, formato: F, escala: esc };
+  return { tipo: modo, prims: P, formato: F, escala: esc, area, alvos };
 }
 
 /* As folhas do projeto técnico de uma sala: AC e Sinal (ou uma só, "AC e Sinal", na sala pequena) */
@@ -1137,7 +1166,7 @@ export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas, for
 
 /* ---------------- saída: SVG (prévia) e PDF (jsPDF) ---------------- */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-export function svg(folha, imagens = {}, { classe = '' } = {}) {
+export function svg(folha, imagens = {}, { classe = '', alvos = false } = {}) {
   const f = v => +(+v).toFixed(2);
   const F = folha.formato, out = [];
   for (const p of folha.prims) {
@@ -1154,6 +1183,8 @@ export function svg(folha, imagens = {}, { classe = '' } = {}) {
       out.push(`<text x="${f(p.x)}" y="${f(p.y)}" font-size="${f(p.size * MM_PT)}" font-family="Helvetica,Arial,sans-serif"${p.bold ? ' font-weight="700"' : ''}${p.cs ? ` letter-spacing="${f(p.cs)}"` : ''} fill="${p.color || '#000'}" text-anchor="${anc}"${rot}>${esc(p.txt)}</text>`);
     } else if (p.t === 'img' && imagens[p.src]) out.push(`<image href="${esc(imagens[p.src])}" x="${f(p.x)}" y="${f(p.y)}" width="${f(p.w)}" height="${f(p.h)}" preserveAspectRatio="xMidYMid meet"/>`);
   }
+  // alças invisíveis por cima dos aparelhos que dá para arrastar (só na prévia do app)
+  if (alvos) for (const a of folha.alvos || []) out.push(`<rect class="pj-alvo" data-alvo="${esc(a.chave)}" x="${f(a.x)}" y="${f(a.y)}" width="${f(a.w)}" height="${f(a.h)}" rx="1" fill="transparent"><title>Arraste para mudar o lugar: ${esc(a.nome || '')}</title></rect>`);
   return `<svg class="${classe}" viewBox="0 0 ${F.w} ${F.h}" xmlns="http://www.w3.org/2000/svg" role="img" style="background:#fff">${out.join('')}</svg>`;
 }
 
