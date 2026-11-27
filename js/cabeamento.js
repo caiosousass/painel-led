@@ -589,19 +589,71 @@ function gradeTecnica(P, g, modo, ondeLiga) {
   P.push({ t: 'rect', x: g.x0, y: g.y0, w: g.w, h: g.h, stroke: '#64748b', sw: 0.2 });
 }
 
+/* O rack de energia no padrão da Projetech: caixa escura, painel cinza arredondado e, em cada saída, a tomada
+ * Steck (cinza, com o círculo azul e o encaixe em cima), o disjuntor (branco, alavancas vermelhas) e o LED verde.
+ * Devolve onde fica cada tomada, para o cabo da prolonga entrar nela. */
 function rackTecnico(P, x, y, w, h, tipo, rotulo, k) {
-  const nS = RACKS[tipo] || 9, colsT = nS === 12 ? 4 : 3, linT = Math.ceil(nS / colsT);
-  P.push({ t: 'rect', x: x - w / 2, y, w, h, fill: '#3f4652', stroke: '#111827', sw: 0.35 * k, r: 1.2 * k });
-  const tw = w * 0.8 / colsT, th = h * 0.78 / linT;
+  const nS = RACKS[tipo] || 9, cols = nS === 12 ? 4 : 3, lins = Math.ceil(nS / cols);
+  const tr = w * 0.006, x0 = x - w / 2;
+  P.push({ t: 'rect', x: x0, y, w, h, fill: '#3a3838', stroke: '#111111', sw: tr });
+  const pad = w * 0.022;
+  P.push({ t: 'rect', x: x0 + pad, y: y + pad, w: w - 2 * pad, h: h - 2 * pad, fill: '#767171', stroke: '#111111', sw: tr, r: h * 0.12 });
+  const gx = x0 + w * 0.08, gw = w * 0.86, gy = y + h * 0.08, gh = h * 0.84;
+  const cw = gw / cols, ch = gh / lins, s = Math.min(cw * 0.5, ch * 0.68);
+  const socks = [];
   for (let i = 0; i < nS; i++) {
-    const tx = x - w * 0.4 + (i % colsT) * tw, ty = y + h * 0.11 + Math.floor(i / colsT) * th;
-    P.push({ t: 'rect', x: tx + tw * 0.08, y: ty + th * 0.1, w: tw * 0.55, h: th * 0.78, fill: '#3b82f6', stroke: '#dbeafe', sw: 0.12 * k, r: 0.5 * k });
-    P.push({ t: 'circle', x: tx + tw * 0.355, y: ty + th * 0.49, r: Math.min(tw, th) * 0.16, fill: '#1e3a8a' });
-    P.push({ t: 'rect', x: tx + tw * 0.7, y: ty + th * 0.3, w: tw * 0.2, h: th * 0.4, fill: '#ef4444', r: 0.2 * k });
+    const col = i % cols, row = Math.floor(i / cols);
+    const sx = gx + col * cw + cw * 0.3, sy = gy + row * ch + ch * 0.5;
+    // a tomada
+    P.push({ t: 'rect', x: sx - s / 2, y: sy - s / 2, w: s, h: s, fill: '#d0cece', stroke: '#111111', sw: s * 0.05, r: s * 0.16 });
+    P.push({ t: 'circle', x: sx, y: sy + s * 0.04, r: s * 0.37, fill: '#0070c0' });
+    P.push({ t: 'rect', x: sx - s * 0.13, y: sy - s * 0.43, w: s * 0.26, h: s * 0.2, fill: '#0070c0' });
+    // o disjuntor e o LED
+    const bx = sx + s * 0.74, bw = s * 0.5, bh = s * 0.66, by = sy - s * 0.16;
+    P.push({ t: 'rect', x: bx, y: by, w: bw, h: bh, fill: '#f8f8f8' });
+    P.push({ t: 'rect', x: bx + bw * 0.12, y: by + bh * 0.5, w: bw * 0.76, h: bh * 0.32, fill: '#c00000' });
+    P.push({ t: 'rect', x: bx + bw * 0.24, y: by + bh * 0.24, w: bw * 0.16, h: bh * 0.3, fill: '#c00000' });
+    P.push({ t: 'rect', x: bx + bw * 0.6, y: by + bh * 0.24, w: bw * 0.16, h: bh * 0.3, fill: '#c00000' });
+    P.push({ t: 'circle', x: bx + bw / 2, y: by - s * 0.2, r: s * 0.08, fill: '#00b050' });
+    socks.push({ x: sx, y: sy, m: s, col, row, cols });
   }
-  P.push({ t: 'rect', x: x - w / 2 + 1 * k, y: y + h, w: 1.4 * k, h: 1.6 * k, fill: '#111827' });
-  P.push({ t: 'rect', x: x + w / 2 - 2.4 * k, y: y + h, w: 1.4 * k, h: 1.6 * k, fill: '#111827' });
-  P.push({ t: 'text', x, y: y + h + 5 * k, txt: rotulo, size: 6.5 * k, align: 'center', color: '#111827' });
+  // os pés
+  const pw = w * 0.075, ph = h * 0.14;
+  P.push({ t: 'rect', x: x0 + w * 0.035, y: y + h, w: pw, h: ph, fill: '#3a3838', stroke: '#111111', sw: tr, r: pw * 0.2 });
+  P.push({ t: 'rect', x: x0 + w - w * 0.035 - pw, y: y + h, w: pw, h: ph, fill: '#3a3838', stroke: '#111111', sw: tr, r: pw * 0.2 });
+  P.push({ t: 'text', x, y: y + h + ph + 3.6 * k, txt: rotulo, size: 6.5 * k, align: 'center', color: '#111827' });
+  return socks;
+}
+
+/* A ponta da prolonga Steck (azul): o corpo quadrado na linha das réguas e a ponta afunilando para baixo,
+ * de onde sai o cabo grosso até o rack. Devolve o y da ponta. */
+function plugueSteck(P, x, y, pw) {
+  P.push({ t: 'rect', x: x - pw / 2, y: y - pw / 2, w: pw, h: pw, fill: '#0070c0' });
+  const yA = y + pw / 2, yB = y + pw * 1.12, a = pw / 2, b = pw * 0.27;
+  P.push({ t: 'tri', fill: '#0070c0', pts: [[x - a, yA - pw * 0.02], [x + a, yA - pw * 0.02], [x + b, yB], [x - b, yB]] });   // um polígono só (sem emenda)
+  return yB;
+}
+
+/* Qual tomada do rack cada prolonga pega: quem vem da esquerda entra pela coluna da esquerda (a mais perto
+ * na tomada de cima), da direita pela coluna da direita, e quem vem de cima (ou sobrou) desce nas tomadas do
+ * meio — sempre na mesma ordem da esquerda para a direita, para os cabos não se cruzarem. */
+function tomadasDoRack(rs, socks, xr, w) {
+  const esqL = xr - w / 2, dirL = xr + w / 2, cols = socks.length ? socks[0].cols : 3;
+  const usadas = new Set(), out = [];
+  const coluna = c => socks.filter(s => s.col === c).sort((a, b) => a.row - b.row);
+  const lado = (lista, col, nome) => {
+    const sobra = [];
+    lista.forEach((r, i) => { const s = coluna(col)[i]; if (s) { usadas.add(s); out.push({ r, s, lado: nome }); } else sobra.push(r); });
+    return sobra;
+  };
+  const cima = rs.filter(r => r.xm >= esqL && r.xm <= dirL)
+    .concat(lado(rs.filter(r => r.xm < esqL).sort((a, b) => b.xm - a.xm), 0, 'esq'))
+    .concat(lado(rs.filter(r => r.xm > dirL).sort((a, b) => a.xm - b.xm), cols - 1, 'dir'));
+  const meio = (cols - 1) / 2;
+  const livres = socks.filter(s => !usadas.has(s)).sort((a, b) => a.row - b.row || Math.abs(a.col - meio) - Math.abs(b.col - meio));
+  const escolhidas = livres.slice(0, cima.length).sort((a, b) => a.x - b.x);
+  cima.sort((a, b) => a.xm - b.xm).forEach((r, i) => { if (escolhidas[i]) out.push({ r, s: escolhidas[i], lado: 'cima' }); });
+  return out;
 }
 
 /* desenha a sala na área; k = tamanho dos aparelhos e letras (o U da prancha). Devolve a escala (mm por m). */
@@ -633,8 +685,13 @@ function salaTecnica(P, ps, area, modo, k) {
   }
   const xMin = area.x, xMax = area.x + area.w;
   if (comAC) {
+    // fino: o powercon de cada circuito descendo do painel até a prolonga Steck; grosso: a prolonga até o rack
+    const fino = 0.24 * k, grosso = 0.6 * k, pw = 1.9 * k;
     const yBus = yBase + Math.min(8 * k, hBaixo * 0.15);
-    const rackH = Math.min(15 * k, hBaixo * 0.3), rackW = Math.min(24 * k, area.w / Math.max(1, ps.racks.length * 1.6));
+    const larg = rk => ((RACKS[rk.tipo] || 9) === 12 ? 1.75 : 1.36);   // rack de 12 é mais largo (4 colunas)
+    const propMax = Math.max(1.36, ...ps.racks.map(larg));
+    const caber = area.w / Math.max(1, ps.racks.length * 1.6);
+    const rackH = Math.min(17 * k, hBaixo * 0.36, caber / propMax), rackW = rackH * propMax;
     const yR = yBase + hBaixo * 0.42;
     // as réguas da sala (uma régua pode juntar circuitos de mais de uma tela)
     const reg = new Map(), geoDe = new Map(geo.map(g => [g.ti, g])), repetida = new Map();
@@ -645,12 +702,12 @@ function salaTecnica(P, ps, area, modo, k) {
         if (!c) continue;
         const col = c.caminho[0][0], cw = g.w / g.pl.colunas, chave = ti + ':' + col, q = repetida.get(chave) || 0;
         repetida.set(chave, q + 1);
-        xs.push(g.x0 + (col + 0.5) * cw + q * Math.min(cw * 0.22, 1.6));
+        xs.push((g.cx ? g.cx(col) : g.x0 + (col + 0.5) * cw) - q * Math.min(cw * 0.22, 1.6));
       }
       if (!xs.length) continue;
       const xm = (Math.min(...xs) + Math.max(...xs)) / 2;
-      xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111827', sw: 0.3 * k }));
-      if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111827', sw: 0.3 * k });
+      xs.forEach(xx => P.push({ t: 'line', x1: xx, y1: yBase + 0.4, x2: xx, y2: yBus, stroke: '#111111', sw: fino }));
+      if (xs.length > 1) P.push({ t: 'line', x1: Math.min(...xs), y1: yBus, x2: Math.max(...xs), y2: yBus, stroke: '#111111', sw: fino });
       reg.set(r.n, { xm });
     }
     const racks = ps.racks.map(rk => {
@@ -658,17 +715,29 @@ function salaTecnica(P, ps, area, modo, k) {
       return Object.assign({}, rk, { rs, x: rs.length ? rs.reduce((a, r) => a + r.xm, 0) / rs.length : (xMin + xMax) / 2 });
     });
     espalhar(racks, rackW, xMin, xMax);
+    const yTip = yBus + pw * 1.12;
     for (const rk of racks) {
-      const mm = rk.rs.length;
-      rk.rs.forEach((r, j) => {
-        const esq = rk.x - rackW / 2, dir = rk.x + rackW / 2;
-        const yE = yR + rackH * (0.22 + 0.56 * (mm > 1 ? j / (mm - 1) : 0.5));
-        const pts = r.xm < esq ? [[r.xm, yBus], [r.xm, yE], [esq, yE]] : r.xm > dir ? [[r.xm, yBus], [r.xm, yE], [dir, yE]] : [[r.xm, yBus], [r.xm, yR]];
-        P.push({ t: 'poly', pts, stroke: '#111827', sw: 0.55 * k });
-        P.push({ t: 'tri', fill: '#2563eb', pts: [[r.xm - 1.1 * k, yBus - 0.2 * k], [r.xm + 1.1 * k, yBus - 0.2 * k], [r.xm, yBus + 1.54 * k]] });
-      });
-      const nS = RACKS[rk.tipo] || 9;
-      rackTecnico(P, rk.x, yR, rackW, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`, k);
+      const nS = RACKS[rk.tipo] || 9, w = rackH * larg(rk);
+      const socks = rackTecnico(P, rk.x, yR, w, rackH, rk.tipo, `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`, k);
+      const lig = tomadasDoRack(rk.rs, socks, rk.x, w);
+      // quem desce por cima: um nível de passagem para cada um, sem cruzar (o que vai mais longe passa mais alto)
+      const dir = lig.filter(l => l.lado === 'cima' && l.s.x > l.r.xm + 0.3).sort((a, b) => a.r.xm - b.r.xm);
+      const esq = lig.filter(l => l.lado === 'cima' && l.s.x < l.r.xm - 0.3).sort((a, b) => b.r.xm - a.r.xm);
+      const niveis = Math.max(dir.length, esq.length);
+      const passo = Math.min(2 * k, (yR - yTip) / (niveis + 2));
+      dir.forEach((l, i) => { l.y = yR - passo * (1 + i); });
+      esq.forEach((l, i) => { l.y = yR - passo * (1 + i); });
+      for (const l of lig) {
+        const { r, s: t } = l, m2 = t.m / 2;
+        const pts = l.lado === 'esq' ? [[r.xm, yTip], [r.xm, t.y], [t.x - m2, t.y]]
+          : l.lado === 'dir' ? [[r.xm, yTip], [r.xm, t.y], [t.x + m2, t.y]]
+          : l.y != null ? [[r.xm, yTip], [r.xm, l.y], [t.x, l.y], [t.x, t.y - m2]]
+          : [[r.xm, yTip], [r.xm, l.y = (yTip + yR) / 2], [t.x, l.y], [t.x, t.y - m2]];
+        P.push({ t: 'poly', pts, stroke: '#111111', sw: grosso });
+      }
+      // prolonga sem tomada livre (rack cheio): desce até o rack
+      for (const r of rk.rs) if (!lig.some(l => l.r === r)) P.push({ t: 'poly', pts: [[r.xm, yTip], [r.xm, yR]], stroke: '#111111', sw: grosso });
+      for (const r of rk.rs) plugueSteck(P, r.xm, yBus, pw);
     }
   }
   if (comSinal) {
@@ -935,7 +1004,9 @@ export function pdf(doc, folha, imagens = {}) {
       doc.setDrawColor(p.stroke); doc.setLineWidth(p.sw);
       for (let i = 1; i < p.pts.length; i++) doc.line(p.pts[i - 1][0], p.pts[i - 1][1], p.pts[i][0], p.pts[i][1]);
     } else if (p.t === 'tri') {
-      doc.setFillColor(p.fill); doc.triangle(p.pts[0][0], p.pts[0][1], p.pts[1][0], p.pts[1][1], p.pts[2][0], p.pts[2][1], 'F');
+      doc.setFillColor(p.fill);
+      if (p.pts.length === 3) doc.triangle(p.pts[0][0], p.pts[0][1], p.pts[1][0], p.pts[1][1], p.pts[2][0], p.pts[2][1], 'F');
+      else doc.lines(p.pts.slice(1).map((q, i) => [q[0] - p.pts[i][0], q[1] - p.pts[i][1]]), p.pts[0][0], p.pts[0][1], [1, 1], 'F', true);   // polígono
     } else if (p.t === 'circle') {
       if (p.fill) doc.setFillColor(p.fill);
       if (p.stroke) { doc.setDrawColor(p.stroke); doc.setLineWidth(p.sw || 0.15); }

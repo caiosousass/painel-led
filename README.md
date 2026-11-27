@@ -114,8 +114,11 @@ A sala inteira numa folha 16:9, com o nome da sala, as telas e as medidas no alt
 projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, cliente e número da folha).
 
 - **Cabeamento de AC** — cada circuito de powercon com a sua cor e o caminho do cabo (início verde, fim
-  vermelho); os circuitos descem até a **régua** Steck/Powercon (triângulo azul) e as réguas até o **rack de
-  energia** da sala (as réguas da sala inteira repartidas nos racks).
+  vermelho); os circuitos descem (cabo **fino**) até a ponta azul da **prolonga Steck** da régua e as prolongas
+  descem (cabo **grosso**) até uma **tomada do rack de energia** da sala (as réguas da sala inteira repartidas
+  nos racks). O rack é o do padrão da Projetech: caixa escura, painel cinza, tomadas Steck com disjuntor e LED,
+  pés. Quem vem da esquerda entra pela coluna da esquerda, da direita pela da direita, e de cima pelo meio — os
+  cabos não se cruzam.
 - **Cabeamento de Sinal** — cada porta com a sua cor e a etiqueta Novastar (C · P · RV · A · WH) em cada
   gabinete; as portas de cada tela descem até a **controladora** dela (MCTRL660: 4 portas e 2,3 milhões de
   pixels; ou Taurus TB60 / TB1) e as controladoras até a **processadora** da sala (o nome vem do Projeto da sala).
