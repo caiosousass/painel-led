@@ -146,7 +146,11 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
     cabos dele ou tirar. A controladora que o sistema sugeriu e ficou sem cabo some sozinha;
   - **textos**: toque no título, na descrição, no nome de uma tela ou aparelho, ou num campo do carimbo
     (projeto, local, sala, responsável, datas, cliente, agência, O.S.) e escreva por cima — vazio volta ao padrão;
-  - **Desfazer / Refazer** (Ctrl+Z / Ctrl+Y) e *Lugares automáticos*, *Ligações automáticas*, *Textos padrão*.
+  - **Desfazer / Refazer** (Ctrl+Z / Ctrl+Y ou Ctrl+Shift+Z): vale para tudo da tela do projeto (campos, editor
+    e prancha), enquanto ela está aberta; e *Lugares automáticos*, *Ligações automáticas*, *Textos padrão*;
+  - **atalhos** com algo selecionado na prancha (toque numa tela, aparelho ou porta): **Ctrl+C / Ctrl+V** copia e
+    cola (tela duplicada, ou outro aparelho igual — dá para colar em outra sala), **Ctrl+X** recorta, **Delete**
+    tira (porta: desliga), **Esc** solta a seleção. Nos campos de texto, os atalhos são os normais.
   Um CVT4K-S para várias telas: ponha o CVT4K-S e arraste para ele as portas (ou *Toda a tela aqui*) de cada tela.
 
 O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.

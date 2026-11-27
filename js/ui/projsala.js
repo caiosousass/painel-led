@@ -82,12 +82,33 @@ function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
  *  - tocar num texto (título, nomes, carimbo) para escrever por cima (projeto.textos[chave]; vazio = padrão);
  *  - Desfazer / Refazer (também Ctrl+Z / Ctrl+Y). */
 const selPrancha = new Map();   // lista → o que está selecionado na prancha { tipo, chave, id }
-const historico = new Map();    // lista → { antes: [projeto…], depois: [projeto…] }
-let atalhoPrancha = null;       // Ctrl+Z / Ctrl+Y da prancha aberta
+const historico = new Map();    // lista → { antes: [estado…], depois: [estado…] } (estado = projeto + telas)
+const estadoMostrado = new Map(); // lista → o estado que está na tela agora (vira o "antes" da próxima mudança)
+let areaTransf = null;          // o que foi copiado na prancha (aparelho ou tela) — dá para colar em outra sala
+let atalhoPrancha = null;       // { id, voltar, copiar, colar, cortar, apagar, temSel } da prancha aberta
+const fotoDa = lista => JSON.stringify({ projeto: lista.projeto || {}, telas: lista.telas || [] });
+/* guarda o estado de antes da mudança (toda mudança da tela do projeto passa aqui: campos, editor e prancha) */
+function guardarHistorico(id) {
+  const h = historico.get(id) || { antes: [], depois: [] }, antes = estadoMostrado.get(id);
+  historico.set(id, h);
+  if (antes == null || h.antes[h.antes.length - 1] === antes) return;
+  h.antes.push(antes);
+  if (h.antes.length > 60) h.antes.shift();
+  h.depois.length = 0;
+}
 document.addEventListener('keydown', e => {
-  if (!atalhoPrancha || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
-  const k = e.key.toLowerCase();
-  if (k === 'z' || k === 'y') { e.preventDefault(); atalhoPrancha(k === 'y' || (k === 'z' && e.shiftKey) ? 'refazer' : 'desfazer'); }
+  const A = atalhoPrancha;
+  if (!A || location.hash !== '#/projeto/' + A.id) return;
+  const alvo = e.target, digitando = alvo && (/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName) || alvo.isContentEditable);
+  if (digitando || document.querySelector('.modal-fundo, .modal')) return;   // nos campos e janelas, o normal do navegador
+  const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  const textoMarcado = String(window.getSelection && window.getSelection()).trim() !== '';
+  if (ctrl && (k === 'z' || k === 'y')) { e.preventDefault(); return A.voltar(k === 'y' || e.shiftKey ? 'refazer' : 'desfazer'); }
+  if (ctrl && k === 'c' && A.temSel() && !textoMarcado) { e.preventDefault(); return A.copiar(); }
+  if (ctrl && k === 'x' && A.temSel() && !textoMarcado) { e.preventDefault(); return A.cortar(); }
+  if (ctrl && k === 'v' && areaTransf) { e.preventDefault(); return A.colar(); }
+  if (!ctrl && (k === 'delete' || k === 'backspace') && A.temSel()) { e.preventDefault(); return A.apagar(); }
+  if (!ctrl && k === 'escape' && A.temSel()) { e.preventDefault(); return A.limparSel(); }
 });
 
 /* a montagem de processamento como a pessoa vê agora (a sugestão automática vira dela, com ids novos) */
@@ -125,6 +146,12 @@ function selecaoHtml(ctx, ps, sel) {
       ${c ? `<label class="campo"><span>Saída</span><select data-ps="saida">${opS}</select></label>` : '<div></div>'}
       <div class="pj-sel-b">${c ? `<button class="btn sm pj-tela-toda">Toda a ${B.esc(nomeTela(p.ti))} aqui</button>` : ''}${solta ? '' : '<button class="btn sm pj-soltar">Desligar</button>'}</div></div></div>`;
   }
+  if (sel.tipo === 'tela') {
+    const it = ps.telas.find(x => x.tela && 'tela:' + x.tela.id === sel.chave);
+    if (!it) return '';
+    return `<div class="pj-sel"><div class="pj-sel-t"><b>${B.esc(it.nome || 'Tela')}</b> <span class="mut2">${it.pl ? B.num(it.pl.largura_m) + ' × ' + B.num(it.pl.altura_m) + ' m' : ''} · Ctrl+C / Ctrl+V duplica · Delete tira</span>${fechar}</div>
+      <div class="pj-sel-b"><button class="btn sm pj-tela-dup">Duplicar</button><button class="btn sm pj-tela-tirar">Tirar da sala</button></div></div>`;
+  }
   if (sel.tipo === 'ctrl') {
     const c = lista.find(q => q.id === sel.id);
     if (!c) return '';
@@ -141,13 +168,12 @@ function ligarPrancha(el, ctx, lista, id) {
   const caixa = el.querySelector('.pj-folha.pode');
   const hist = historico.get(id) || { antes: [], depois: [] };
   historico.set(id, hist);
-  // grava o projeto da sala (com histórico); recalc quando a ligação muda as controladoras da lista
-  const gravar = async (projeto, { recalc = false, sel } = {}) => {
-    hist.antes.push(JSON.stringify(lista.projeto || {}));
-    if (hist.antes.length > 60) hist.antes.shift();
-    hist.depois.length = 0;
+  // grava a sala (com histórico); recalc quando a mudança mexe na lista (ligações, telas)
+  const gravar = async (projeto, { recalc = false, sel, telas } = {}) => {
+    guardarHistorico(id);
     if (sel !== undefined) { if (sel) selPrancha.set(id, sel); else selPrancha.delete(id); }
     lista.projeto = projeto;
+    if (telas) lista.telas = telas;
     await ctx.D.salvar('listas', lista, { silencioso: true });
     if (recalc) { const r = await recalcularLista(ctx, lista); if (r && r.pendente) B.toast('A separação já começou: confira as mudanças na lista (aviso amarelo).'); }
     ctx.atualizar();
@@ -155,16 +181,19 @@ function ligarPrancha(el, ctx, lista, id) {
   const voltar = async qual => {
     const de = qual === 'desfazer' ? hist.antes : hist.depois, para = qual === 'desfazer' ? hist.depois : hist.antes;
     if (!de.length) return B.toast(qual === 'desfazer' ? 'Nada para desfazer.' : 'Nada para refazer.');
-    para.push(JSON.stringify(lista.projeto || {}));
-    lista.projeto = JSON.parse(de.pop());
+    para.push(fotoDa(lista));
+    const e = JSON.parse(de.pop());
+    lista.projeto = e.projeto;
+    lista.telas = e.telas;
+    selPrancha.delete(id);
     await ctx.D.salvar('listas', lista, { silencioso: true });
     await recalcularLista(ctx, lista);
     ctx.atualizar();
   };
-  atalhoPrancha = caixa ? voltar : null;
   const bt = (q, fn) => { const b = el.querySelector(q); if (b) b.onclick = fn; };
   bt('.pj-desf', () => voltar('desfazer'));
   bt('.pj-ref', () => voltar('refazer'));
+  atalhoPrancha = { id, voltar, temSel: () => false };   // sem prancha: só Ctrl+Z / Ctrl+Y
   if (!caixa) return;
 
   const fs0 = folhasDaLista(ctx, lista, { hoje: ctx.hoje() });
@@ -242,7 +271,7 @@ function ligarPrancha(el, ctx, lista, id) {
     if (!a.mexeu) {
       // tocar: texto → escrever por cima; porta/controladora → selecionar
       if (a.tipo === 'texto') return editarTexto(a.chave);
-      if (a.tipo === 'porta' || a.tipo === 'ctrl') { selPrancha.set(id, { tipo: a.tipo, chave: a.chave, id: a.id }); return ctx.atualizar(); }
+      if (a.tipo === 'porta' || a.tipo === 'ctrl' || a.tipo === 'tela') { selPrancha.set(id, { tipo: a.tipo, chave: a.chave, id: a.id }); return ctx.atualizar(); }
       return;
     }
     if (a.tipo === 'texto') return;
@@ -334,11 +363,74 @@ function ligarPrancha(el, ctx, lista, id) {
     const cid = novo(sel.id);
     for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === cid) pr.ligacoes[k] = { solta: true };
   }, novo => ({ tipo: 'ctrl', id: novo(sel.id) })));
-  bt('.pj-ctrl-tirar', () => sel && mudarProc((pr, novo) => {
+  const tirarCtrl = () => sel && mudarProc((pr, novo) => {
     const cid = novo(sel.id);
     pr.ctrls = pr.ctrls.filter(c => c.id !== cid);
     for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === cid) pr.ligacoes[k] = { solta: true };
-  }, null));
+  }, null);
+  bt('.pj-ctrl-tirar', tirarCtrl);
+
+  // ---- telas: duplicar e tirar (também Ctrl+C / Ctrl+V e Delete) ----
+  const idTela = chave => String(chave || '').replace(/^tela:/, '');
+  const colarTela = modelo => {
+    const ps = psAgora(), pos = Cab.posicoesDaSala(ps), telas = JSON.parse(JSON.stringify(lista.telas || []));
+    let fim = 0;
+    for (const it of ps.telas) if (it.pl) {
+      const t = telas.find(x => x.id === it.tela.id);
+      if (t && !t.pos) t.pos = { x: +pos.get(it).toFixed(2) };
+      fim = Math.max(fim, pos.get(it) + it.pl.largura_m);
+    }
+    const c = JSON.parse(JSON.stringify(modelo));
+    c.id = ctx.novoId(); c.nome = (modelo.nome || 'Tela') + ' (cópia)'; delete c.calc_uid;
+    c.pos = { x: +(fim + 1).toFixed(2) };
+    telas.push(c);
+    return gravar(proj({}), { recalc: true, telas, sel: { tipo: 'tela', chave: 'tela:' + c.id } });
+  };
+  const tirarTela = chave => {
+    const tid = idTela(chave), t = (lista.telas || []).find(x => x.id === tid);
+    if (!t) return;
+    B.toast(`${t.nome || 'Tela'} saiu da sala — Ctrl+Z desfaz.`);
+    return gravar(proj({}), { recalc: true, telas: lista.telas.filter(x => x.id !== tid), sel: null });
+  };
+  bt('.pj-tela-dup', () => { const t = sel && (lista.telas || []).find(x => x.id === idTela(sel.chave)); if (t) colarTela(t); });
+  bt('.pj-tela-tirar', () => sel && tirarTela(sel.chave));
+
+  const copiar = () => {
+    const sAtual = selPrancha.get(id);
+    if (!sAtual) return;
+    if (sAtual.tipo === 'ctrl') {
+      const c = psAgora().processamento.ctrls.find(q => q.id === sAtual.id);
+      if (!c) return;
+      areaTransf = { tipo: 'ctrl', ctrlTipo: c.tipo };
+      return B.toast(`${M.CONTROLADORAS[c.tipo].nome} copiada — Ctrl+V põe outra igual.`);
+    }
+    if (sAtual.tipo === 'tela') {
+      const t = (lista.telas || []).find(x => x.id === idTela(sAtual.chave));
+      if (!t) return;
+      areaTransf = { tipo: 'tela', tela: JSON.parse(JSON.stringify(t)) };
+      return B.toast(`${t.nome || 'Tela'} copiada — Ctrl+V cola uma igual (nesta ou noutra sala).`);
+    }
+    B.toast('Selecione uma tela ou um aparelho para copiar.');
+  };
+  const colar = () => {
+    if (!areaTransf) return;
+    if (areaTransf.tipo === 'tela') return colarTela(areaTransf.tela);
+    const nid = ctx.novoId();
+    return mudarProc(pr => { pr.ctrls.push({ id: nid, tipo: areaTransf.ctrlTipo }); }, { tipo: 'ctrl', id: nid });
+  };
+  const apagar = () => {
+    const sAtual = selPrancha.get(id);
+    if (!sAtual) return;
+    if (sAtual.tipo === 'ctrl') return tirarCtrl();
+    if (sAtual.tipo === 'tela') return tirarTela(sAtual.chave);
+    if (sAtual.tipo === 'porta') return mudarProc(pr => { pr.ligacoes[sAtual.chave] = { solta: true }; }, sAtual);
+  };
+  atalhoPrancha = {
+    id, voltar, copiar, colar, apagar,
+    cortar: () => { copiar(); return apagar(); },
+    temSel: () => !!selPrancha.get(id),
+    limparSel: () => { selPrancha.delete(id); ctx.atualizar(); }
+  };
 }
 
 export function render(ctx, [id]) {
@@ -435,6 +527,7 @@ export function ligar(el, ctx, [id]) {
   el.querySelectorAll('[data-ir]').forEach(b => { b.onclick = () => ctx.ir(b.dataset.ir); });
   const lista = ctx.lista(id);
   if (!lista) return;
+  estadoMostrado.set(id, fotoDa(lista));
   el.querySelectorAll('.ir-lista').forEach(b => { b.onclick = () => ctx.ir('lista/' + id); });
   el.querySelector('.exportar').onclick = async () => {
     try {
@@ -453,6 +546,7 @@ export function ligar(el, ctx, [id]) {
   if (!pode) { ligarMontagem(el, ctx, lista, psAgora(), null, false); el.querySelectorAll('input,select').forEach(i => { i.disabled = true; }); return; }
 
   const salvar = async (campos, { recalc = true } = {}) => {
+    guardarHistorico(id);
     Object.assign(lista, campos);
     await ctx.D.salvar('listas', lista, { silencioso: true });
     if (recalc) {
