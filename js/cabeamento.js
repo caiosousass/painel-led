@@ -542,7 +542,7 @@ function bolinha(P, x, y, r, fill, stroke, txt) {
   P.push({ t: 'text', x, y: y + mm * 0.36, txt, size: mm / MM_PT, bold: true, align: 'center', color: '#ffffff' });
 }
 
-function gradeTecnica(P, g, modo) {
+function gradeTecnica(P, g, modo, ondeLiga) {
   const pl = g.pl, sinal = modo !== 'ac';
   const grupos = sinal ? pl.dados.portas : pl.energia.circuitos;
   const cor = new Map();
@@ -553,13 +553,23 @@ function gradeTecnica(P, g, modo) {
     const i = cor.get(c + ',' + r);
     P.push({ t: 'rect', x: g.x0 + c * cw, y: g.y0 + r * ch, w: cw, h: ch, fill: i == null ? '#d1d5db' : CORES_PORTA[i % CORES_PORTA.length], stroke: '#ffffff', sw });
   }
-  const cx = c => g.x0 + (c + 0.5) * cw, cy = r => g.y0 + (r + 0.5) * ch;
-  const pt = m / 7.6 / MM_PT;
-  if (sinal && pt >= 2.1) {
-    for (const p of pl.dados.portas) p.caminho.forEach(([c, r], k) => {
-      ['C-1', 'P-' + p.n, 'RV-' + (k + 1), 'A-0°', 'WH-' + pl.px_l + 'x' + pl.px_a]
-        .forEach((t, j) => P.push({ t: 'text', x: g.x0 + c * cw + m * 0.06, y: g.y0 + r * ch + m * (0.17 + j * 0.155), txt: t, size: pt, color: '#1f2937' }));
-    });
+  // Com a etiqueta Novastar, as letras ficam em cima à esquerda do gabinete e o cabo (linha, setas e
+  // bolinhas) corre no canto de baixo à direita: nada passa por cima das letras. Gabinete pequeno demais
+  // na folha (sem etiqueta) e AC: o cabo passa pelo meio.
+  const pt = m * 0.1 / MM_PT, etiqueta = sinal && pt >= 1.6;
+  const cx = etiqueta ? c => g.x0 + (c + 1) * cw - m * 0.18 : c => g.x0 + (c + 0.5) * cw;
+  const cy = etiqueta ? r => g.y0 + (r + 1) * ch - m * 0.18 : r => g.y0 + (r + 0.5) * ch;
+  g.cx = cx;   // a descida até a controladora sai do mesmo ponto
+  if (etiqueta) {
+    // C = qual controladora da sala (MCTRL660 1, 2…) e P = a saída dela onde entra o cabo desta porta;
+    // sem controladora (Nenhuma), C-1 e a ordem do cabo
+    for (const p of pl.dados.portas) {
+      const lg = (ondeLiga && ondeLiga.get(g.ti + ':' + p.n)) || { c: 1, p: p.n };
+      p.caminho.forEach(([c, r], k) => {
+        ['C-' + lg.c, 'P-' + lg.p, 'RV-' + (k + 1), 'A-0°', 'WH-' + pl.px_l + 'x' + pl.px_a]
+          .forEach((t, j) => P.push({ t: 'text', x: g.x0 + c * cw + m * 0.06, y: g.y0 + r * ch + m * (0.14 + j * 0.12), txt: t, size: pt, color: '#1f2937' }));
+      });
+    }
   }
   const tr = Math.max(0.4, m * 0.11), azul = '#1d4ed8';
   for (const gp of grupos) {
@@ -575,13 +585,6 @@ function gradeTecnica(P, g, modo) {
     const ini = String(gp.n), fim = sinal && g.it.cfg && g.it.cfg.backup ? gp.n + 'B' : '';
     bolinha(P, pts[0][0], pts[0][1], rr, '#16a34a', '#14532d', ini);
     bolinha(P, pts[pts.length - 1][0], pts[pts.length - 1][1], rr, '#dc2626', '#7f1d1d', fim);
-  }
-  if (sinal && pt >= 2.1) {
-    const ctrl = (CONTROLADORAS[g.it.ctrl.item] || {}).nome || '';
-    for (const p of pl.dados.portas) {
-      const [c, r] = p.caminho[0];
-      P.push({ t: 'text', x: g.x0 + c * cw + m * 0.06, y: g.y0 + (r + 1) * ch - m * 0.05, txt: (ctrl ? ctrl + ' · ' : '') + 'P' + p.n, size: pt, bold: true, color: '#111827' });
-    }
   }
   P.push({ t: 'rect', x: g.x0, y: g.y0, w: g.w, h: g.h, stroke: '#64748b', sw: 0.2 });
 }
@@ -621,8 +624,11 @@ function salaTecnica(P, ps, area, modo, k) {
     const w = it.pl.largura_m * s, h = it.pl.altura_m * s, x = xIni + (pos.get(it) - x0m) * s;
     return { it, ti, pl: it.pl, x0: x, y0: yBase - h, w, h, xm: x + w / 2 };
   });
+  // onde cada porta liga: "ti:n" → { c: nº da controladora na sala, p: saída dela }
+  const ondeLiga = new Map();
+  for (const c of (ps.processamento && ps.processamento.ctrls) || []) c.saidas.forEach((p, k) => { if (p) ondeLiga.set(p.ti + ':' + p.n, { c: c.n, p: k + 1 }); });
   for (const g of geo) {
-    gradeTecnica(P, g, modo);
+    gradeTecnica(P, g, modo, ondeLiga);
     if (geo.length > 1) P.push({ t: 'text', x: g.xm, y: g.y0 - 1.6 * k, txt: corta(`${g.it.nome || 'Tela'} · ${n2t(g.pl.largura_m)} x ${n2t(g.pl.altura_m)} m`, Math.max(g.w * 1.2, 24 * k), 6.5 * k, true), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
   }
   const xMin = area.x, xMax = area.x + area.w;
@@ -679,7 +685,7 @@ function salaTecnica(P, ps, area, modo, k) {
         if (!pt) continue;
         const col = pt.caminho[0][0], cw = g.w / g.pl.colunas, chave = p.ti + ':' + col, q = repetida.get(chave) || 0;
         repetida.set(chave, q + 1);
-        xs.push(g.x0 + (col + 0.5) * cw + q * Math.min(cw * 0.22, 1.6));
+        xs.push((g.cx ? g.cx(col) : g.x0 + (col + 0.5) * cw) - q * Math.min(cw * 0.22, 1.6));
       }
       const g0 = c.tela != null ? geoDe.get(c.tela) : null;
       if (!xs.length) return { c, x: g0 ? g0.xm : (xMin + xMax) / 2, xb: null };
@@ -691,7 +697,14 @@ function salaTecnica(P, ps, area, modo, k) {
     espalhar(ctrls, cW, xMin, xMax);
     for (const cc of ctrls) {
       const c = cc, ct = cc.c, nome = (CONTROLADORAS[ct.tipo] || {}).nome || 'Controladora';
-      const nomes = ct.saidas.map((p, i) => (p ? `${i + 1}: ${(ps.telas[p.ti] && ps.telas[p.ti].nome) || 'Tela'} P${p.n}` : null)).filter(Boolean);
+      // legenda: saída da controladora → tela e nº do cabo (a bolinha). Tudo de uma tela, em sequência:
+      // "P1–P4: Central cabos 5–8"; misturado: "P1: Lateral 1 · P2: Central 3"
+      const nomeT = ti => (ps.telas[ti] && ps.telas[ti].nome) || 'Tela';
+      const ligs = ct.saidas.map((p, i) => (p ? { i, p } : null)).filter(Boolean);
+      const seguidos = ligs.length > 1 && ligs.every((x, j) => x.p.ti === ligs[0].p.ti && x.i === ligs[0].i + j && x.p.n === ligs[0].p.n + j);
+      const ult = ligs[ligs.length - 1];
+      const nomes = seguidos ? [`P${ligs[0].i + 1}–P${ult.i + 1}: ${nomeT(ligs[0].p.ti)} cabos ${ligs[0].p.n}–${ult.p.n}`]
+        : ligs.map(x => `P${x.i + 1}: ${nomeT(x.p.ti)} ${x.p.n}`);
       const it = { ctrl: { qtd: 1 }, portas: ct.usadas, cfg: {} };
       if (c.xb != null) P.push({ t: 'poly', pts: [[c.xb, yBusS], [c.xb, (yBusS + yC) / 2], [c.x, (yBusS + yC) / 2], [c.x, yC]], stroke: '#111827', sw: 0.3 * k });
       // a controladora: aparelho de 1U preto, com o display e as portas
