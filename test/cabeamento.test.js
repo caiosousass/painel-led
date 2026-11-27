@@ -219,3 +219,25 @@ test('prancha editável: porta solta, textos por cima e tela arrastada', () => {
   const t3 = s3.alvos.find(a => a.tipo === 'tela'), A = s3.area;
   assert.ok(Math.abs(t3.x + t3.w / 2 - (A.x + 0.5 * A.w)) < 0.01 && Math.abs(t3.y - (A.y + 0.05 * A.h)) < 0.01);
 });
+
+test('folha de título da sala (fora da numeração), textos livres com seta, textos que andam e o tamanho do desenho', () => {
+  const cat = catalogoInicial();
+  const telas = [{ id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3 }];
+  const meta = { sala: 'Auditório', os: '34630', cliente: 'IBET', local: 'Hotel Renaissance' };
+  const fl = Cab.folhasTecnicas(M.planoSala(telas, cat, { folhas: 'separadas' }), meta, { capa: true, inicio: 4, total: 16 });
+  assert.deepEqual(fl.map(f => f.tipo), ['titulo', 'ac', 'sinal']);
+  const txt = f => f.prims.filter(p => p.t === 'text').map(p => p.txt);
+  assert.ok(['Auditório', 'JOB: 34630', 'Cliente: IBET', 'Local: Hotel Renaissance'].every(t => txt(fl[0]).includes(t)));
+  assert.ok(txt(fl[1]).includes('5/16') && txt(fl[2]).includes('6/16'));   // a de título não conta
+  // texto livre com seta, título arrastado 40 mm, desenho em 50%
+  const ps = M.planoSala(telas, cat, { folhas: 'separadas', notas: [{ id: 'n', folha: 'sinal', txt: 'Backdrop\nQ15', fx: 0.1, fy: 0.2, cor: 'vermelho', tam: 8, seta: { fx: 0.4, fy: 0.4 } }],
+    layout: { sinal: { zoom: 0.5, 'txt:titulo:sinal': { dx: 40, dy: 0 } } } });
+  const s0 = Cab.folhasTecnicas(M.planoSala(telas, cat, { folhas: 'separadas' }), meta, {}).find(f => f.tipo === 'sinal');
+  const s1 = Cab.folhasTecnicas(ps, meta, {}).find(f => f.tipo === 'sinal');
+  assert.ok(txt(s1).includes('Backdrop') && txt(s1).includes('Q15'));
+  assert.ok(s1.alvos.some(a => a.tipo === 'nota') && s1.alvos.some(a => a.tipo === 'seta'));
+  const tit = f => f.prims.find(p => p.id === 'txt:titulo:sinal');
+  assert.equal(+(tit(s1).x - tit(s0).x).toFixed(2), 40);
+  assert.ok(Math.abs(s1.escala - s0.escala * 0.5) < 1e-9);                   // a escala do carimbo acompanha
+  assert.ok(s1.alvos.filter(a => a.tipo === 'texto' && a.fixo).length >= 9);  // o carimbo fica no lugar
+});

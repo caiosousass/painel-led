@@ -636,7 +636,7 @@ function gradeTecnica(P, g, modo, ondeLiga, alvos) {
 /* O rack de energia no padrão da Projetech: caixa escura, painel cinza arredondado e, em cada saída, a tomada
  * Steck (cinza, com o círculo azul e o encaixe em cima), o disjuntor (branco, alavancas vermelhas) e o LED verde.
  * Devolve onde fica cada tomada, para o cabo da prolonga entrar nela. */
-function rackTecnico(P, x, y, w, h, tipo, rotulo, k) {
+function rackTecnico(P, x, y, w, h, tipo, rotulo, k, idTxt) {
   const nS = RACKS[tipo] || 9, cols = nS === 12 ? 4 : 3, lins = Math.ceil(nS / cols);
   const tr = w * 0.006, x0 = x - w / 2;
   P.push({ t: 'rect', x: x0, y, w, h, fill: '#3a3838', stroke: '#111111', sw: tr });
@@ -665,7 +665,7 @@ function rackTecnico(P, x, y, w, h, tipo, rotulo, k) {
   const pw = w * 0.075, ph = h * 0.14;
   P.push({ t: 'rect', x: x0 + w * 0.035, y: y + h, w: pw, h: ph, fill: '#3a3838', stroke: '#111111', sw: tr, r: pw * 0.2 });
   P.push({ t: 'rect', x: x0 + w - w * 0.035 - pw, y: y + h, w: pw, h: ph, fill: '#3a3838', stroke: '#111111', sw: tr, r: pw * 0.2 });
-  P.push({ t: 'text', x, y: y + h + ph + 3.6 * k, txt: rotulo, size: 6.5 * k, align: 'center', color: '#111827' });
+  P.push({ t: 'text', id: idTxt, x, y: y + h + ph + 3.6 * k, txt: rotulo, size: 6.5 * k, align: 'center', color: '#111827' });
   return socks;
 }
 
@@ -857,6 +857,84 @@ export function desenhaProcessadoraH(P, mod, cx, y, w) {
   return { w, h };
 }
 
+
+/* ---------------- prancha livre: textos que andam, textos novos (com seta) ----------------
+ * Os textos de nome (título, telas, aparelhos) podem ser arrastados: o deslocamento fica em
+ * projeto.layout[folha]['txt:<chave>'] = { dx, dy } (mm), relativo ao lugar padrão — se o aparelho anda,
+ * o nome anda junto. Os campos do carimbo ficam no lugar (fixo). */
+function moverTextos(P, alvos, lay) {
+  for (const a of alvos) {
+    if (a.tipo !== 'texto' || a.fixo) continue;
+    const d = lay && lay['txt:' + a.chave];
+    if (!d || !(+d.dx || +d.dy)) continue;
+    for (const p of P) if (p.id === 'txt:' + a.chave) { p.x += +d.dx || 0; p.y += +d.dy || 0; }
+    a.x += +d.dx || 0; a.y += +d.dy || 0;
+  }
+}
+/* Textos livres da folha (projeto.notas): [{ id, folha, txt, fx, fy, cor, tam, seta: { fx, fy } | null }] — fx/fy em
+ * frações da folha (o canto de cima à esquerda do texto); a seta aponta para onde a pessoa puser a ponta. */
+export const CORES_NOTA = { vermelho: '#c00000', preto: '#111827', azul: '#1d4ed8' };
+function notasDaFolha(P, alvos, ps, modo, F, U) {
+  for (const n of ps.cfg.notas || []) {
+    if (!n || n.folha !== modo) continue;
+    const size = (+n.tam || 8) * U, mm = size * MM_PT, cor = CORES_NOTA[n.cor] || n.cor || CORES_NOTA.vermelho;
+    const linhas = String(n.txt || '').split('\n');
+    const x = (+n.fx || 0) * F.w, y = (+n.fy || 0) * F.h;
+    const w = Math.max(6 * mm, ...linhas.map(l => larguraTexto(l, size, false))), h = mm * (0.3 + linhas.length * 1.2);
+    linhas.forEach((l, i) => P.push({ t: 'text', x, y: y + mm * (1.0 + i * 1.2), txt: l, size, color: cor }));
+    if (n.seta && Number.isFinite(+n.seta.fx)) {
+      const sx = +n.seta.fx * F.w, sy = +n.seta.fy * F.h;
+      const ox = sx < x ? x - mm * 0.3 : sx > x + w ? x + w + mm * 0.3 : x + w / 2;
+      const oy = sx < x || sx > x + w ? y + mm * 0.6 : sy < y ? y : y + h;
+      P.push({ t: 'line', x1: ox, y1: oy, x2: sx, y2: sy, stroke: cor, sw: 0.22 * U });
+      const a = Math.atan2(sy - oy, sx - ox), t = 1.6 * U;
+      P.push({ t: 'tri', fill: cor, pts: [[sx, sy], [sx - Math.cos(a - 0.35) * t, sy - Math.sin(a - 0.35) * t], [sx - Math.cos(a + 0.35) * t, sy - Math.sin(a + 0.35) * t]] });
+      alvos.push({ tipo: 'seta', id: n.id, chave: 'seta:' + n.id, nome: 'Ponta da seta', x: sx - 1.6 * U, y: sy - 1.6 * U, w: 3.2 * U, h: 3.2 * U, redondo: true });
+    }
+    alvos.push({ tipo: 'nota', id: n.id, chave: 'nota:' + n.id, nome: 'Texto', x: x - mm * 0.2, y: y + mm * 0.1, w: w + mm * 0.4, h });
+  }
+}
+
+/* A folha de título da sala (como a capa de cada sala nas implantações da Projetech): o logo em cima, o nome da
+ * sala grande, JOB / Cliente / Local, as faixas azuis e o símbolo grande no canto. Os textos são editáveis. */
+export function folhaTitulo(ps, meta, { formato, razaoLogo } = {}) {
+  const F = FORMATOS[formato] || FORMATOS.a3, W = F.w, H = F.h, U = Math.max(1, H / 210), MG = 8;
+  const P = [], alvos = [], azul = '#1e9bf0', claro = '#bfe3fb';
+  const its = ps.telas.filter(it => it.pl);
+  const salaPad = meta.sala || (its.length === 1 ? its[0].nome : '') || 'Sala';
+  // o símbolo grande no canto (anel + bola), cortado pela moldura: desenha e cobre o que passa dela de branco
+  const cx = W - MG - W * 0.075, cy = H - MG - H * 0.13, R = H * 0.31;
+  P.push({ t: 'circle', x: cx, y: cy, r: R * 0.82, stroke: '#22b8f5', sw: R * 0.36 });
+  P.push({ t: 'circle', x: cx, y: cy, r: R * 0.42, fill: '#1c8ff0' });
+  P.push({ t: 'rect', x: 0, y: H - MG, w: W, h: MG + 1, fill: '#ffffff' });
+  P.push({ t: 'rect', x: W - MG, y: 0, w: MG + 1, h: H, fill: '#ffffff' });
+  // faixas
+  P.push({ t: 'rect', x: MG + W * 0.012, y: MG, w: 0.9 * U, h: H - 2 * MG, fill: claro });
+  P.push({ t: 'rect', x: MG + W * 0.025, y: H * 0.31, w: 4.2 * U, h: H * 0.45, fill: azul });
+  P.push({ t: 'rect', x: W - MG - W * 0.055, y: MG, w: 4.6 * U, h: H * 0.6, fill: azul });
+  P.push({ t: 'rect', x: W - MG - W * 0.03, y: MG, w: 0.9 * U, h: H - 2 * MG, fill: claro });
+  P.push({ t: 'rect', x: MG, y: MG, w: W - 2 * MG, h: H - 2 * MG, stroke: '#6b7280', sw: 0.3 * U });
+  // logo
+  const lw = W * 0.27, lh = lw / (razaoLogo || 3.5);
+  P.push({ t: 'img', src: 'logo', x: (W - lw) / 2, y: H * 0.1, w: lw, h: lh });
+  // nome da sala e os dados
+  const x0 = W * 0.135, yT = H * 0.47, sT = 52 * U;
+  const nome = textoDe(ps, 'sala', salaPad);
+  P.push({ t: 'text', id: 'txt:sala', x: x0, y: yT, txt: nome, size: sT, color: '#0a0a0a' });
+  alvoTexto(alvos, ps, 'sala', 'Nome da sala', salaPad, x0, yT, sT, false);
+  P.push({ t: 'line', x1: MG + W * 0.045, y1: yT + 3.2 * U, x2: W * 0.48, y2: yT + 3.2 * U, stroke: '#7cc6f5', sw: 0.35 * U });
+  const sL = 26 * U, passo = sL * MM_PT * 1.25;
+  [['os', 'JOB: ', meta.os], ['cliente', 'Cliente: ', meta.cliente], ['local', 'Local: ', meta.local]].forEach(([ch, rot, pad], i) => {
+    const v = textoDe(ps, ch, pad || ''), yb = yT + 17 * U + i * passo;
+    if (!v) return;
+    P.push({ t: 'text', id: 'txt:' + ch, x: x0, y: yb, txt: rot + v, size: sL, color: '#0a0a0a' });
+    alvos.push({ tipo: 'texto', chave: ch, nome: rot.replace(': ', ''), padrao: pad || '', valor: v, x: x0, y: yb - sL * MM_PT * 0.85, w: larguraTexto(rot + v, sL, false), h: sL * MM_PT * 1.15 });
+  });
+  notasDaFolha(P, alvos, ps, 'titulo', F, U);
+  moverTextos(P, alvos, (ps.cfg.layout || {}).titulo);
+  return { tipo: 'titulo', prims: P, formato: F, escala: 0, area: { x: MG, y: MG, w: W - 2 * MG, h: H - 2 * MG }, alvos };
+}
+
 /* desenha a sala na área; k = tamanho dos aparelhos e letras (o U da prancha). Devolve a escala (mm por m). */
 function salaTecnica(P, ps, area, modo, k, alvos = []) {
   const its = ps.telas.map((it, ti) => ({ it, ti })).filter(o => o.it.pl);
@@ -873,7 +951,9 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
   const totW = Math.max(0.5, x1m - x0m);
   const maxH = Math.max(...its.map(o => o.it.pl.altura_m));
   const hNome = its.length > 1 ? 5 * k : 0;
-  const s = Math.min(area.w / totW, (area.h - hBaixo - hNome) / maxH);
+  // o tamanho do desenho na folha (projeto.layout[folha].zoom; 1 = o que cabe) — a escala do carimbo acompanha
+  const zoom = Math.min(3, Math.max(0.3, +(((ps.cfg.layout || {})[modo]) || {}).zoom || 1));
+  const s = Math.min(area.w / totW, (area.h - hBaixo - hNome) / maxH) * zoom;
   const yTop = area.y + Math.max(0, (area.h - (hNome + maxH * s + hBaixo)) / 2);
   let yBase = yTop + hNome + maxH * s;
   const xIni = area.x + (area.w - totW * s) / 2;
@@ -899,7 +979,7 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
     gradeTecnica(P, g, modo, ondeLiga, alvos);
     if (geo.length > 1) {
       const pad = `${g.it.nome || 'Tela'} · ${n2t(g.pl.largura_m)} x ${n2t(g.pl.altura_m)} m`, txt = corta(textoDe(ps, 'tela:' + idT, pad), Math.max(g.w * 1.2, 24 * k), 6.5 * k, true);
-      P.push({ t: 'text', x: g.xm, y: g.y0 - 1.6 * k, txt, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+      P.push({ t: 'text', id: 'txt:tela:' + idT, x: g.xm, y: g.y0 - 1.6 * k, txt, size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
       alvoTexto(alvos, ps, 'tela:' + idT, 'Nome da tela na folha', pad, g.xm, g.y0 - 1.6 * k, 6.5 * k, true, 'center');
     }
   }
@@ -955,7 +1035,7 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
       const yRk = Math.max(yTip + 3 * k, pr.y);
       alvos.push({ tipo: 'rack', chave, nome: 'Rack ' + rk.n, x: rk.x - w / 2, y: yRk, w, h: rackH * 1.14 });
       const padR = `Rack ${rk.n} · ${nS} saídas · ${rk.reguas.length} régua${rk.reguas.length === 1 ? '' : 's'}`;
-      const socks = rackTecnico(P, rk.x, yRk, w, rackH, rk.tipo, textoDe(ps, 'rotulo:' + chave, padR), k);
+      const socks = rackTecnico(P, rk.x, yRk, w, rackH, rk.tipo, textoDe(ps, 'rotulo:' + chave, padR), k, 'txt:rotulo:' + chave);
       alvoTexto(alvos, ps, 'rotulo:' + chave, 'Nome do rack', padR, rk.x, yRk + rackH * 1.14 + 3.6 * k, 6.5 * k, false, 'center');
       const lig = tomadasDoRack(rk.rs, socks, rk.x, w);
       // quem desce por cima: um nível de passagem para cada um, sem cruzar (o que vai mais longe passa mais alto)
@@ -1025,7 +1105,7 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
       c.w = d.w; c.h = d.h;
       // as legendas ficam na largura da caixa: o cabo até a processadora sai pelo lado, sem passar por cima delas
       const padC = `${nome} ${ct.n} · ${ct.usadas} porta${ct.usadas === 1 ? '' : 's'}`;
-      P.push({ t: 'text', x: c.x, y: c.y + d.h + 3.2 * k, txt: corta(textoDe(ps, 'rotulo:' + c.chave, padC), cW * 0.95, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
+      P.push({ t: 'text', id: 'txt:rotulo:' + c.chave, x: c.x, y: c.y + d.h + 3.2 * k, txt: corta(textoDe(ps, 'rotulo:' + c.chave, padC), cW * 0.95, 5.5 * k), size: 5.5 * k, align: 'center', color: '#111827' });
       alvoTexto(alvos, ps, 'rotulo:' + c.chave, 'Nome da controladora', padC, c.x, c.y + d.h + 3.2 * k, 5.5 * k, false, 'center');
       if (nomes.length) P.push({ t: 'text', x: c.x, y: c.y + d.h + 6 * k, txt: corta(nomes.join(' · '), cW * 0.95, 4.4 * k), size: 4.4 * k, align: 'center', color: '#475569' });
       baixoC = Math.max(baixoC, c.y + d.h + (nomes.length ? 7 : 4.4) * k);
@@ -1063,7 +1143,7 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
       P.push({ t: 'line', x1: xP, y1: yJ, x2: xP, y2: yP, stroke: '#111111', sw: (ctrls.some(c => (CONTROLADORAS[c.c.tipo] || {}).fibra) ? 0.75 : 0.3) * k });
       if (mod) {
         desenhaProcessadoraH(P, mod, xP, yP, pW);
-        P.push({ t: 'text', x: xP, y: yP + pH + pW * 0.012 + 4.2 * k, txt: textoDe(ps, 'rotulo:proc', 'Processadora ' + mod), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+        P.push({ t: 'text', id: 'txt:rotulo:proc', x: xP, y: yP + pH + pW * 0.012 + 4.2 * k, txt: textoDe(ps, 'rotulo:proc', 'Processadora ' + mod), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
         alvoTexto(alvos, ps, 'rotulo:proc', 'Nome da processadora', 'Processadora ' + mod, xP, yP + pH + pW * 0.012 + 4.2 * k, 6.5 * k, true, 'center');
       } else {
         // outra processadora: a caixa genérica, com a tela azul e os botões
@@ -1072,7 +1152,7 @@ function salaTecnica(P, ps, area, modo, k, alvos = []) {
         for (let i = 0; i < 3; i++) P.push({ t: 'rect', x: xP + pW * 0.1 + i * pW * 0.09, y: yP + pH * 0.3, w: pW * 0.06, h: pH * 0.12, fill: '#d1d5db' });
         P.push({ t: 'rect', x: xP - pW / 2 + 1.2 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
         P.push({ t: 'rect', x: xP + pW / 2 - 2.8 * k, y: yP + pH, w: 1.6 * k, h: 1.2 * k, fill: '#111827' });
-        P.push({ t: 'text', x: xP, y: yP + pH + 4.6 * k, txt: textoDe(ps, 'rotulo:proc', proc), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
+        P.push({ t: 'text', id: 'txt:rotulo:proc', x: xP, y: yP + pH + 4.6 * k, txt: textoDe(ps, 'rotulo:proc', proc), size: 6.5 * k, bold: true, align: 'center', color: '#111827' });
         alvoTexto(alvos, ps, 'rotulo:proc', 'Nome da processadora', proc, xP, yP + pH + 4.6 * k, 6.5 * k, true, 'center');
       }
     }
@@ -1147,7 +1227,7 @@ function carimbo(P, Q, { grupos, esq, dir, com, numero, total, razaoLogo, alvos,
     const lw = larguraTexto(rot + ': ', FS, false);
     P.push({ t: 'text', x: x0, y: yb, txt: rot + ': ', size: FS, color: '#696969' });
     P.push({ t: 'text', x: x0 + lw, y: yb, txt: corta(valor || '—', maxW - lw, FS, true), size: FS, bold: true, color: '#191919' });
-    if (alvos && cp && cp[2]) { const mm = FS * MM_PT; alvos.push({ tipo: 'texto', chave: cp[2], nome: rot, padrao: cp[3], valor: valor || '', x: x0, y: yb - mm * 0.9, w: maxW, h: mm * 1.25 }); }
+    if (alvos && cp && cp[2]) { const mm = FS * MM_PT; alvos.push({ tipo: 'texto', fixo: true, chave: cp[2], nome: rot, padrao: cp[3], valor: valor || '', x: x0, y: yb - mm * 0.9, w: maxW, h: mm * 1.25 }); }
   };
   const parDado = (rot, valor, x0, yb, maxW) => {
     P.push({ t: 'circle', x: x0 + 0.75 * U, y: yb - 0.75 * U, r: 0.36 * U, fill: '#969696' });
@@ -1186,11 +1266,11 @@ export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato
   const sala = textoDe(ps, 'sala', salaPad);
   // o que é a folha, como as legendas das páginas de vista do Calculator (tudo editável na prancha)
   const titPad = TIPOS_TECNICO[modo] + (sala ? ' · ' + sala : '');
-  P.push({ t: 'text', x: MG + 4 * U, y: MG + 5.6 * U, txt: textoDe(ps, 'titulo:' + modo, titPad), size: 9 * U, bold: true, color: '#464646' });
+  P.push({ t: 'text', id: 'txt:titulo:' + modo, x: MG + 4 * U, y: MG + 5.6 * U, txt: textoDe(ps, 'titulo:' + modo, titPad), size: 9 * U, bold: true, color: '#464646' });
   alvoTexto(alvos, ps, 'titulo:' + modo, 'Título da folha', titPad, MG + 4 * U, MG + 5.6 * U, 9 * U, true);
   const subPad = descricaoDasTelas(ps, sala), sub = textoDe(ps, 'subtitulo', subPad);
   if (sub) {
-    P.push({ t: 'text', x: MG + 4 * U, y: MG + 9.8 * U, txt: corta(sub, PW - 2 * MG - 8 * U, 7 * U), size: 7 * U, color: '#787878' });
+    P.push({ t: 'text', id: 'txt:subtitulo', x: MG + 4 * U, y: MG + 9.8 * U, txt: corta(sub, PW - 2 * MG - 8 * U, 7 * U), size: 7 * U, color: '#787878' });
     alvoTexto(alvos, ps, 'subtitulo', 'Descrição das telas', subPad, MG + 4 * U, MG + 9.8 * U, 7 * U, false);
   }
   const area = { x: MG + 6 * U, y: MG + 13 * U, w: PW - 2 * MG - 12 * U, h: Q.drawBottom - (MG + 13 * U) };
@@ -1227,17 +1307,20 @@ export function folhaTecnica(ps, modo, meta, { numero, total, razaoLogo, formato
     dir: [campo('Data de montagem', 'montagem', dataCurta(meta.montagem)), campo('Data de emissão', 'emissao', dataCurta(meta.emissao)), campo('Cliente', 'cliente', meta.cliente), campo('Agência', 'agencia', meta.agencia)],
     com: campo('Nº O.S', 'os', meta.os), numero, total, razaoLogo
   });
+  notasDaFolha(P, alvos, ps, modo, F, U);
+  moverTextos(P, alvos, (ps.cfg.layout || {})[modo]);
   return { tipo: modo, prims: P, formato: F, escala: esc, area, alvos };
 }
 
 /* As folhas do projeto técnico de uma sala: AC e Sinal (ou uma só, "AC e Sinal", na sala pequena) */
-export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas, formato } = {}) {
+export function folhasTecnicas(ps, meta, { inicio, total, razaoLogo, folhas, formato, capa } = {}) {
   const desenhaveis = ps.telas.filter(it => it.pl);
   if (!desenhaveis.length) return [];
   const f = folhas || ps.cfg.folhas;
   const modos = f === 'juntas' ? ['ambos'] : f === 'separadas' ? ['ac', 'sinal'] : (desenhaveis.length === 1 && ps.reguas <= 1 ? ['ambos'] : ['ac', 'sinal']);
   const n0 = inicio || 0;
-  return modos.map((m, i) => folhaTecnica(ps, m, meta, { numero: n0 + i + 1, total: total || n0 + modos.length, razaoLogo, formato: formato || ps.cfg.folha }));
+  const tec = modos.map((m, i) => folhaTecnica(ps, m, meta, { numero: n0 + i + 1, total: total || n0 + modos.length, razaoLogo, formato: formato || ps.cfg.folha }));
+  return capa ? [folhaTitulo(ps, meta, { formato: formato || ps.cfg.folha, razaoLogo })].concat(tec) : tec;
 }
 
 /* ---------------- saída: SVG (prévia) e PDF (jsPDF) ---------------- */
@@ -1262,8 +1345,10 @@ export function svg(folha, imagens = {}, { classe = '', alvos = false, sel = nul
   // alças invisíveis por cima dos aparelhos que dá para arrastar (só na prévia do app)
   const ehSel = a => sel && a.tipo === sel.tipo && (a.tipo === 'ctrl' ? a.id === sel.id : a.chave === sel.chave);
   if (alvos) for (const a of folha.alvos || []) {
-    const dica = a.tipo === 'porta' ? 'Arraste até uma controladora/CVT para ligar; toque para mudar ou desligar' : a.tipo === 'ctrl' ? 'Arraste para mudar o lugar; toque para trocar o tipo ou tirar' : 'Arraste para mudar o lugar';
-    out.push(`<rect class="pj-alvo${ehSel(a) ? ' sel' : ''}" data-alvo="${esc(a.chave)}" data-tipo="${esc(a.tipo || '')}" data-id="${esc(a.id || '')}" x="${f(a.x)}" y="${f(a.y)}" width="${f(a.w)}" height="${f(a.h)}" rx="${a.redondo ? f(a.w / 2) : 1}" fill="transparent"><title>${esc(a.nome || '')} — ${dica}</title></rect>`);
+    const dica = a.tipo === 'porta' ? 'Arraste até uma controladora/CVT para ligar; toque para mudar ou desligar' : a.tipo === 'ctrl' ? 'Arraste para mudar o lugar; toque para trocar o tipo ou tirar'
+      : a.tipo === 'texto' ? (a.fixo ? 'Toque para escrever por cima' : 'Toque para escrever por cima; arraste para mudar de lugar') : a.tipo === 'nota' ? 'Toque para editar; arraste para mudar de lugar'
+      : a.tipo === 'seta' ? 'Arraste a ponta da seta' : 'Arraste para mudar o lugar';
+    out.push(`<rect class="pj-alvo${ehSel(a) ? ' sel' : ''}" data-alvo="${esc(a.chave)}" data-tipo="${esc(a.tipo || '')}" data-id="${esc(a.id || '')}"${a.fixo ? ' data-fixo="1"' : ''} x="${f(a.x)}" y="${f(a.y)}" width="${f(a.w)}" height="${f(a.h)}" rx="${a.redondo ? f(a.w / 2) : 1}" fill="transparent"><title>${esc(a.nome || '')} — ${dica}</title></rect>`);
   }
   return `<svg class="${classe}" viewBox="0 0 ${F.w} ${F.h}" xmlns="http://www.w3.org/2000/svg" role="img" style="background:#fff">${out.join('')}</svg>`;
 }

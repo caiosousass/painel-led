@@ -9,7 +9,7 @@ import * as Cab from '../cabeamento.js';
 
 // cores das portas (as do projeto) — também no 3D
 export const CORES = Cab.CORES_PORTA;
-export const NOME_FOLHA = { ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal' };
+export const NOME_FOLHA = { titulo: 'Título', ac: 'AC', sinal: 'Sinal', ambos: 'AC e Sinal' };
 export const FORMATOS = Cab.FORMATOS;
 export function formatoDaLista(lista) { const f = (lista.projeto || {}).folha; return Cab.FORMATOS[f] ? f : 'a3'; }
 const RAZAO_LOGO = 2946 / 842;          // logo.png
@@ -28,7 +28,7 @@ function metaDaLista(ctx, lista, hoje) {
 /* as folhas de uma sala: [{ tipo: 'ac'|'sinal'|'ambos', prims, formato }] */
 export function folhasDaLista(ctx, lista, { hoje, inicio, total } = {}) {
   const ps = ctx.M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
-  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista) });
+  return Cab.folhasTecnicas(ps, metaDaLista(ctx, lista, hoje || ctx.hoje()), { inicio, total, razaoLogo: RAZAO_LOGO, formato: formatoDaLista(lista), capa: (lista.projeto || {}).capa !== '0' });
 }
 
 export function svgDaFolha(ctx, lista, folha, op) { return Cab.svg(folha, IMAGENS_SVG, op); }
@@ -63,12 +63,13 @@ async function exportarProjetoDe(ctx, listas, partesNome) {
   const imagens = {};
   try { imagens.logo = await carregarImagem('logo.png', 1000); } catch (e) { /* sai sem logo */ }
   const hoje = ctx.hoje();
-  const contas = listas.map(l => folhasDaLista(ctx, l, { hoje }).length);
+  const contas = listas.map(l => folhasDaLista(ctx, l, { hoje }).filter(f => f.tipo !== 'titulo').length);   // a folha de título não conta
   const total = contas.reduce((a, b) => a + b, 0);
   if (!total) throw new Error('Nenhuma tela com painel e medida (L × A) para desenhar.');
   const folhas = [];
   let n = 0;
   listas.forEach((l, i) => { folhas.push(...folhasDaLista(ctx, l, { hoje, inicio: n, total })); n += contas[i]; });
+  if (!folhas.length) throw new Error('Nenhuma folha para exportar.');
   const { jsPDF } = window.jspdf;
   const F0 = folhas[0].formato;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [F0.w, F0.h], compress: true });

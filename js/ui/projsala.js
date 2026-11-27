@@ -250,15 +250,29 @@ function ligarPrancha(el, ctx, lista, id) {
 
   // ---- arrastar (telas e aparelhos), ligar cabo (porta → controladora), tocar (selecionar / editar texto) ----
   const paraFolha = e => { const svg = caixa.querySelector('svg'), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
-  const comLayout = lay => Object.assign({}, lista, { projeto: proj({ layout: lay }) });
+  // o projeto com o arrasto aplicado (sempre a partir do projeto de quando começou a arrastar)
+  const projetoArrastado = (a, p) => {
+    const pj = JSON.parse(JSON.stringify(a.proj0)), F = folha.formato, A = folha.area;
+    pj.layout = Object.assign({}, pj.layout);
+    const L0 = pj.layout[folha.tipo] = Object.assign({}, pj.layout[folha.tipo]);
+    if (a.tipo === 'texto') {
+      const d0 = L0['txt:' + a.chave] || {};
+      L0['txt:' + a.chave] = { dx: +((+d0.dx || 0) + p.x - a.p0.x).toFixed(2), dy: +((+d0.dy || 0) + p.y - a.p0.y).toFixed(2) };
+    } else if (a.tipo === 'nota' || a.tipo === 'seta') {
+      const n = (pj.notas || []).find(q => q.id === a.id);
+      if (n && a.tipo === 'nota') { n.fx = +(((+n.fx || 0) * F.w + p.x - a.p0.x) / F.w).toFixed(4); n.fy = +(((+n.fy || 0) * F.h + p.y - a.p0.y) / F.h).toFixed(4); }
+      if (n && a.tipo === 'seta') n.seta = { fx: +(p.x / F.w).toFixed(4), fy: +(p.y / F.h).toFixed(4) };
+    } else L0[a.chave] = { fx: +((p.x - a.dx - A.x) / A.w).toFixed(4), fy: +((p.y - a.dy - A.y) / A.h).toFixed(4) };
+    return pj;
+  };
   let arr = null, quadro = 0;
   caixa.addEventListener('pointerdown', e => {
     const alvo = e.target.closest('[data-alvo]');
     if (!alvo || e.button > 0) return;
     const x = +alvo.getAttribute('x'), y = +alvo.getAttribute('y'), w = +alvo.getAttribute('width'), h = +alvo.getAttribute('height');
     const p = paraFolha(e);
-    arr = { tipo: alvo.dataset.tipo, chave: alvo.dataset.alvo, id: alvo.dataset.id, p0: p, dx: p.x - (x + w / 2), dy: p.y - y, cx: x + w / 2, cy: y + h / 2, mexeu: false,
-      lay: JSON.parse(JSON.stringify((lista.projeto || {}).layout || {})) };
+    arr = { tipo: alvo.dataset.tipo, chave: alvo.dataset.alvo, id: alvo.dataset.id, fixo: alvo.dataset.fixo === '1', p0: p, dx: p.x - (x + w / 2), dy: p.y - y, cx: x + w / 2, cy: y + h / 2, mexeu: false,
+      proj0: JSON.parse(JSON.stringify(lista.projeto || {})) };
     caixa.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
@@ -268,7 +282,7 @@ function ligarPrancha(el, ctx, lista, id) {
     if (!arr.mexeu && Math.hypot(p.x - arr.p0.x, p.y - arr.p0.y) < 1.2) return;
     arr.mexeu = true;
     caixa.classList.add('arrastando');
-    if (arr.tipo === 'texto') return;
+    if (arr.tipo === 'texto' && arr.fixo) return;
     if (arr.tipo === 'porta') {
       // o cabo novo seguindo o dedo; a controladora embaixo acende
       const svg = caixa.querySelector('svg');
@@ -280,14 +294,11 @@ function ligarPrancha(el, ctx, lista, id) {
       if (alvo) alvo.classList.add('on');
       return;
     }
-    const A = folha.area;
-    arr.lay[folha.tipo] = Object.assign({}, arr.lay[folha.tipo], {
-      [arr.chave]: { fx: +((p.x - arr.dx - A.x) / A.w).toFixed(4), fy: +((p.y - arr.dy - A.y) / A.h).toFixed(4) }
-    });
+    arr.novo = projetoArrastado(arr, p);
     if (!quadro) quadro = requestAnimationFrame(() => {
       quadro = 0;
-      if (!arr || arr.tipo === 'porta') return;
-      const tmp = comLayout(arr.lay), f = folhasDaLista(ctx, tmp, { hoje: ctx.hoje() })[fi];
+      if (!arr || arr.tipo === 'porta' || !arr.novo) return;
+      const tmp = Object.assign({}, lista, { projeto: arr.novo }), f = folhasDaLista(ctx, tmp, { hoje: ctx.hoje() })[fi];
       if (f) caixa.innerHTML = svgDaFolha(ctx, tmp, f, { alvos: true, sel: selPrancha.get(id) });
     });
   });
@@ -299,10 +310,11 @@ function ligarPrancha(el, ctx, lista, id) {
     if (!a.mexeu) {
       // tocar: texto → escrever por cima; porta/controladora → selecionar
       if (a.tipo === 'texto') return editarTexto(a.chave);
+      if (a.tipo === 'nota' || a.tipo === 'seta') return editarNota(a.id);
       if (a.tipo === 'porta' || a.tipo === 'ctrl' || a.tipo === 'tela') { selPrancha.set(id, { tipo: a.tipo, chave: a.chave, id: a.id }); return ctx.atualizar(); }
       return;
     }
-    if (a.tipo === 'texto') return;
+    if (a.tipo === 'texto' && a.fixo) return;
     if (a.tipo === 'porta') {
       const fio = caixa.querySelector('.pj-fio');
       if (fio) fio.remove();
@@ -310,10 +322,49 @@ function ligarPrancha(el, ctx, lista, id) {
       if (alvo) return ligar(a.chave, alvo.dataset.id);
       return ctx.atualizar();
     }
-    return gravar(proj({ layout: a.lay }));
+    return a.novo ? gravar(a.novo) : ctx.atualizar();
   };
   caixa.addEventListener('pointerup', soltar);
   caixa.addEventListener('pointercancel', () => soltar(null));
+
+  // ---- textos livres (com seta, se quiser) ----
+  const editarNota = async nid => {
+    const notas = JSON.parse(JSON.stringify((lista.projeto || {}).notas || [])), n = notas.find(q => q.id === nid);
+    if (!n) return;
+    const v = await B.modal({
+      titulo: 'Texto na folha',
+      corpo: `<label class="campo"><span>Texto</span><textarea class="f-nota" rows="3">${B.esc(n.txt || '')}</textarea></label>
+        <div class="grade g3 m1" style="margin-top:8px">
+          <label class="campo"><span>Cor</span><select class="f-cor">${[['vermelho', 'Vermelho'], ['preto', 'Preto'], ['azul', 'Azul']].map(([k, t]) => `<option value="${k}" ${(n.cor || 'vermelho') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="campo"><span>Tamanho</span><select class="f-tam">${[[6, 'Pequeno'], [8, 'Médio'], [11, 'Grande'], [16, 'Bem grande']].map(([k, t]) => `<option value="${k}" ${(+n.tam || 8) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="linha-flex" style="align-self:end;padding-bottom:8px"><input type="checkbox" class="f-seta" ${n.seta ? 'checked' : ''} style="width:18px;height:18px"> Com seta</label>
+        </div><p class="dica" style="margin:6px 0 0">Enter quebra a linha. Arraste o texto (e a ponta da seta) na folha para pôr no lugar.</p>`,
+      aoAbrir: m => { const t = m.querySelector('.f-nota'); t.focus(); t.select(); },
+      botoes: [{ txt: 'Apagar', valor: '__apagar' }, { txt: 'Cancelar', valor: null },
+        { txt: 'Salvar', cls: 'pri', valor: m => ({ txt: m.querySelector('.f-nota').value.replace(/\s+$/, ''), cor: m.querySelector('.f-cor').value, tam: +m.querySelector('.f-tam').value, seta: m.querySelector('.f-seta').checked }) }]
+    });
+    if (v == null) return;
+    if (v === '__apagar' || !v.txt.trim()) return gravar(proj({ notas: notas.filter(q => q.id !== nid) }));
+    Object.assign(n, { txt: v.txt, cor: v.cor, tam: v.tam });
+    if (v.seta && !n.seta) n.seta = { fx: Math.min(0.95, (+n.fx || 0) + 0.12), fy: Math.min(0.9, (+n.fy || 0) + 0.1) };
+    if (!v.seta) n.seta = null;
+    return gravar(proj({ notas }));
+  };
+  bt('.pj-nota-nova', async () => {
+    const A = folha.area, F = folha.formato, nid = ctx.novoId();
+    const notas = ((lista.projeto || {}).notas || []).concat([{ id: nid, folha: folha.tipo, txt: 'Texto novo', fx: +((A.x + A.w * 0.08) / F.w).toFixed(4), fy: +((A.y + A.h * 0.1) / F.h).toFixed(4), cor: 'vermelho', tam: 8, seta: null }]);
+    await gravar(proj({ notas }));
+    editarNota(nid);
+  });
+  el.querySelectorAll('.pj-zoom').forEach(b => { b.onclick = () => {
+    const passos = [0.4, 0.5, 0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2, 2.5, 3];
+    const lay = Object.assign({}, (lista.projeto || {}).layout), L0 = Object.assign({}, lay[folha.tipo]), z = +L0.zoom || 1;
+    const i = passos.findIndex(p => p >= z - 1e-6), j = Math.max(0, Math.min(passos.length - 1, (i < 0 ? passos.length - 1 : i) + (+b.dataset.z)));
+    L0.zoom = passos[j];
+    if (L0.zoom === 1) delete L0.zoom;
+    lay[folha.tipo] = L0;
+    return gravar(proj({ layout: lay }));
+  }; });
 
   // ---- textos: escrever por cima (vazio = volta ao padrão) ----
   const editarTexto = async chave => {
@@ -507,13 +558,15 @@ export function render(ctx, [id]) {
       const f = folhas[fi], h = historico.get(id) || { antes: [], depois: [] }, pj = lista.projeto || {};
       const temLay = Object.keys((pj.layout || {})[f.tipo] || {}).length, temTxt = Object.keys(pj.textos || {}).length, temLig = !!(pj.processamento && pj.processamento.ctrls);
       return `<div class="pj-barra">
-        ${f.tipo !== 'ac' ? `<span class="peq mut2">Pôr:</span>${Object.entries(M.CONTROLADORAS).map(([t, C]) => `<button class="btn sm pj-novo" data-tipo="${t}">+ ${C.nome}</button>`).join('')}` : ''}
+        ${f.tipo === 'sinal' || f.tipo === 'ambos' ? `<span class="peq mut2">Pôr:</span>${Object.entries(M.CONTROLADORAS).map(([t, C]) => `<button class="btn sm pj-novo" data-tipo="${t}">+ ${C.nome}</button>`).join('')}` : ''}
+        <button class="btn sm pj-nota-nova" title="Acrescentar um texto (com seta, se quiser) nesta folha">+ Texto</button>
+        ${f.tipo !== 'titulo' ? `<span class="pj-zoom-g"><button class="btn sm pj-zoom" data-z="-1" title="Desenho menor">−</button><span class="peq mut2">Desenho ${Math.round((+((pj.layout || {})[f.tipo] || {}).zoom || 1) * 100)}%</span><button class="btn sm pj-zoom" data-z="1" title="Desenho maior">+</button></span>` : ''}
         <span class="cresce"></span>
         <button class="btn sm pj-desf" ${h.antes.length ? '' : 'disabled'} title="Desfazer (Ctrl+Z)">↶ Desfazer</button>
         <button class="btn sm pj-ref" ${h.depois.length ? '' : 'disabled'} title="Refazer (Ctrl+Y)">↷ Refazer</button></div>`
         + `<div class="proj-prev pj-folha pode">${svgDaFolha(ctx, lista, f, { alvos: true, sel: selPrancha.get(id) })}</div>`
         + selecaoHtml(ctx, ps, selPrancha.get(id))
-        + `<div class="pj-arraste peq mut2">${B.ico('info')} <span class="cresce">Arraste telas e aparelhos para mudar o lugar · arraste a bolinha verde de uma porta até uma controladora/CVT para ligar o cabo · toque numa porta, num aparelho ou num texto para mudar.</span>
+        + `<div class="pj-arraste peq mut2">${B.ico('info')} <span class="cresce">Arraste telas, aparelhos e textos para mudar o lugar · bolinha verde da porta até uma controladora/CVT liga o cabo · toque num texto para escrever por cima · + Texto acrescenta um texto (com seta).</span>
           ${temLay ? '<button class="btn sm pj-lay-auto">Lugares automáticos</button>' : ''}${temLig ? '<button class="btn sm pj-lig-auto">Ligações automáticas</button>' : ''}${temTxt ? '<button class="btn sm pj-txt-auto">Textos padrão</button>' : ''}</div>`;
     })() : folhas.length ? `<div class="proj-prev pj-folha">${svgDaFolha(ctx, lista, folhas[fi])}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
     <div class="pj-resumo">
@@ -540,6 +593,7 @@ export function render(ctx, [id]) {
         .map(([val, txt]) => `<option value="${B.esc(val)}" ${val === (sc.processadora || '') ? 'selected' : ''}>${B.esc(txt)}</option>`).join('')}</select></label>
       <label class="campo"><span>Folha do PDF</span>${sel('folha', Object.entries(FORMATOS).map(([k, F]) => [k, F.nome]), formatoDaLista(lista))}</label>
       <label class="campo"><span>Folhas</span>${sel('folhas', [['auto', 'Automático'], ['separadas', 'AC e Sinal separadas'], ['juntas', 'Uma folha só (AC e Sinal)']], sc.folhas)}</label>
+      <label class="campo"><span>Folha de título</span>${sel('capa', [['1', 'Com (nome da sala)'], ['0', 'Sem']], sc.capa === '0' ? '0' : '1')}</label>
     </div>
     <p class="dica">Cada bloco de porta é um circuito de powercon (dividido se passar do limite por circuito) e desce até uma régua; a régua junta circuitos até o limite dela; as réguas da sala inteira são repartidas nos racks. O PDF sai na prancha do Projetech Calculator (A3, 16:9 ou A4), com o desenho do projeto da Syngenta: folha de AC (réguas e rack de energia) e folha de Sinal (controladoras e processadora); no automático, sala com 1 tela e 1 régua sai numa folha só.</p>
   </details>
@@ -594,7 +648,7 @@ export function ligar(el, ctx, [id]) {
     const campo = inp.dataset.sc;
     let val = inp.value;
     if (campo === 'reguas_rack') { val = B.lerNum(val); if (!(val >= 1)) { inp.classList.add('erro'); return; } }
-    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: campo !== 'processadora' && campo !== 'folhas' && campo !== 'folha' });
+    salvar({ projeto: Object.assign({}, lista.projeto || {}, { [campo]: campo === 'processadora' ? val.trim() : val }) }, { recalc: !['processadora', 'folhas', 'folha', 'capa'].includes(campo) });
   }));
   el.querySelectorAll('[data-todas]').forEach(inp => inp.addEventListener('change', () => {
     const val = B.lerNum(inp.value);

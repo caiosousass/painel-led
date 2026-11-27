@@ -140,6 +140,10 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
 - Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer — embaixo do painel, a prolonga e o
   rack na metade da esquerda e a controladora → processadora (desenhadas) na da direita. Dá para pedir sempre
   separadas ou sempre juntas em *Energia e processamento da sala*.
+- **Folha de título** de cada sala (como nas implantações da Projetech): logo, o nome da sala grande, JOB, Cliente e
+  Local, as faixas azuis e o símbolo no canto. Vem antes das folhas da sala e **não entra na numeração** (no PDF do
+  evento, as folhas técnicas seguem numeradas de 1 a N; cada sala com a sua folha de título). Tira em *Energia e
+  processamento → Folha de título: Sem*.
 - **Prancha editável** (na prévia das *Folhas do PDF*; tudo vem no padrão e o que você muda fica gravado na sala
   e vale no PDF):
   - **arrastar** telas, racks, controladoras/CVT e a processadora — os cabos se refazem sozinhos;
@@ -150,6 +154,9 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
     cabos dele ou tirar. A controladora que o sistema sugeriu e ficou sem cabo some sozinha;
   - **textos**: toque no título, na descrição, no nome de uma tela ou aparelho, ou num campo do carimbo
     (projeto, local, sala, responsável, datas, cliente, agência, O.S.) e escreva por cima — vazio volta ao padrão;
+  - **mover textos**: arraste o título, a descrição, o nome de uma tela ou de um aparelho (o carimbo fica no lugar);
+  - **+ Texto**: um texto livre na folha (cor, tamanho, várias linhas) e, se quiser, **com seta** — arraste a ponta;
+  - **Desenho − / +**: o tamanho do desenho na folha (a escala do carimbo acompanha);
   - **Desfazer / Refazer** (Ctrl+Z / Ctrl+Y ou Ctrl+Shift+Z): vale para tudo da tela do projeto (campos, editor
     e prancha), enquanto ela está aberta; e *Lugares automáticos*, *Ligações automáticas*, *Textos padrão*;
   - **atalhos** com algo selecionado na prancha (toque numa tela, aparelho ou porta): **Ctrl+C / Ctrl+V** copia e
@@ -247,4 +254,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 75 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 76 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
