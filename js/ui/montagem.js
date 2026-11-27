@@ -598,6 +598,7 @@ export function ligarMontagem(el, ctx, lista, ps, salvar, pode) {
     const ctrls = ps.processamento.ctrls.map(c => ({ id: novo(c.id), tipo: c.tipo }));
     const ligacoes = {};
     ps.processamento.ctrls.forEach(c => c.saidas.forEach((p, i) => { if (p && !p.estimada) ligacoes[p.chave] = { ctrl: novo(c.id), saida: i + 1 }; }));
+    for (const p of ps.processamento.soltas || []) ligacoes[p.chave] = { solta: true };   // as desligadas na prancha continuam soltas
     return { pr: { ctrls, ligacoes }, novo };
   };
   const gravaProc = (pr, sel) => { if (sel !== undefined) est.selP = sel; salvar({ projeto: Object.assign({}, lista.projeto || {}, { processamento: pr }) }, { recalc: true }); };

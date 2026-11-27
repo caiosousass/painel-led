@@ -136,10 +136,18 @@ projeto, local, tipo de projeto, engenheiro(a) responsável, data, escala, OS, c
 - Sala pequena (1 tela, 1 régua): uma folha só, **AC e Sinal**, como o Foyer — embaixo do painel, a prolonga e o
   rack na metade da esquerda e a controladora → processadora (desenhadas) na da direita. Dá para pedir sempre
   separadas ou sempre juntas em *Energia e processamento da sala*.
-- **Arrastar na prancha**: na prévia das *Folhas do PDF*, arraste o rack, as controladoras/CVT e a processadora
-  para onde quiser — os cabos se refazem sozinhos e o lugar fica gravado na sala (vale no PDF). *Voltar ao
-  automático* desfaz. Um CVT4K-S para várias telas: em *Montagem → 4 · Processamento*, "+ Nova CVT4K-S" numa
-  porta e o mesmo CVT4K-S nas portas das outras telas.
+- **Prancha editável** (na prévia das *Folhas do PDF*; tudo vem no padrão e o que você muda fica gravado na sala
+  e vale no PDF):
+  - **arrastar** telas, racks, controladoras/CVT e a processadora — os cabos se refazem sozinhos;
+  - **ligar um cabo**: arraste a bolinha verde da porta até uma controladora/CVT. Tocando na porta: trocar a
+    controladora e a saída, *Toda a tela aqui* (leva todos os cabos daquela tela) ou *Desligar* (a porta fica
+    **solta**, em vermelho, até você ligar de novo);
+  - **aparelhos**: *Pôr: + CVT4K-S / + CVT10 / + MCTRL660…*; tocando num aparelho, trocar o tipo, desligar os
+    cabos dele ou tirar. A controladora que o sistema sugeriu e ficou sem cabo some sozinha;
+  - **textos**: toque no título, na descrição, no nome de uma tela ou aparelho, ou num campo do carimbo
+    (projeto, local, sala, responsável, datas, cliente, agência, O.S.) e escreva por cima — vazio volta ao padrão;
+  - **Desfazer / Refazer** (Ctrl+Z / Ctrl+Y) e *Lugares automáticos*, *Ligações automáticas*, *Textos padrão*.
+  Um CVT4K-S para várias telas: ponha o CVT4K-S e arraste para ele as portas (ou *Toda a tela aqui*) de cada tela.
 
 O Projetech Calculator não faz este projeto: ele manda a sala para cá pelo *Gerar lista no Painel de LED*.
 
@@ -229,4 +237,4 @@ banco de verdade — exclusão vira marcação, para todos os aparelhos ficarem 
 | `js/ui/*.js` | as telas |
 | `js/permissoes.js` | quem pode o quê (módulos, níveis, modelos prontos) — o banco usa a mesma tabela |
 | `supabase-led.sql` | banco, permissões por pessoa (RLS), tempo real e o administrador |
-| `test/` | `node --test` dentro de `led/` — 74 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |
+| `test/` | `node --test` dentro de `led/` — 75 testes (cabeamento, portas à mão, energia, processamento e projeto técnico, critérios de aceite, Honda 6 × 3,5 m, Syngenta, Borges e Costa, sincronização offline) |

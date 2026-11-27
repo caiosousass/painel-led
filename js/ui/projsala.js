@@ -9,6 +9,7 @@ import { abrir3D } from './tres.js';
 import { folhasDaLista, svgDaFolha, exportarProjeto, NOME_FOLHA, FORMATOS, formatoDaLista } from './projeto.js';
 import { planoDeRecalculo, recalcularLista, editavel } from './lista.js';
 import { htmlMontagem, ligarMontagem } from './montagem.js';
+import * as Cab from '../cabeamento.js';
 
 const folhaVista = new Map(); // lista → folha mostrada
 
@@ -72,62 +73,272 @@ function telaHtml(ctx, lista, t, i, n, it, pode, leds) {
   </div>`;
 }
 
-/* Arrastar os aparelhos (rack, controladoras/CVT, processadora) na prévia da folha: enquanto arrasta, a folha
- * é refeita com o lugar novo (os cabos acompanham); ao soltar, o lugar fica gravado na sala
- * (lista.projeto.layout[tipo da folha][aparelho] = frações da área de desenho). */
-function ligarArraste(el, ctx, lista, id) {
+/* ================= Prancha editável =================
+ * Na prévia da folha dá para mexer em tudo — vem no padrão, e o que a pessoa muda fica gravado na sala:
+ *  - arrastar telas, racks, controladoras/CVT e a processadora (projeto.layout[folha][chave], frações da área);
+ *  - ligar um cabo: arrastar a bolinha verde da porta até uma controladora/CVT; tocar na porta para trocar a
+ *    controladora/saída, levar a tela toda, ou desligar (porta "solta", em vermelho);
+ *  - pôr aparelho novo (+ CVT4K-S…), trocar o tipo ou tirar (tocando nele);
+ *  - tocar num texto (título, nomes, carimbo) para escrever por cima (projeto.textos[chave]; vazio = padrão);
+ *  - Desfazer / Refazer (também Ctrl+Z / Ctrl+Y). */
+const selPrancha = new Map();   // lista → o que está selecionado na prancha { tipo, chave, id }
+const historico = new Map();    // lista → { antes: [projeto…], depois: [projeto…] }
+let atalhoPrancha = null;       // Ctrl+Z / Ctrl+Y da prancha aberta
+document.addEventListener('keydown', e => {
+  if (!atalhoPrancha || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' || k === 'y') { e.preventDefault(); atalhoPrancha(k === 'y' || (k === 'z' && e.shiftKey) ? 'refazer' : 'desfazer'); }
+});
+
+/* a montagem de processamento como a pessoa vê agora (a sugestão automática vira dela, com ids novos) */
+function processamentoEditavel(ctx, ps) {
+  const ids = new Map(), novo = id => { if (!ids.has(id)) ids.set(id, /^auto-/.test(id) ? ctx.novoId() : id); return ids.get(id); };
+  // sugerida: veio da sugestão do sistema (some sozinha se ficar sem cabo); a que a pessoa pôs fica
+  const ctrls = ps.processamento.ctrls.map(c => Object.assign({ id: novo(c.id), tipo: c.tipo }, !c.manual || c.sugerida ? { sugerida: true } : {}));
+  const ligacoes = {};
+  ps.processamento.ctrls.forEach(c => c.saidas.forEach((p, i) => { if (p && !p.estimada) ligacoes[p.chave] = { ctrl: novo(c.id), saida: i + 1 }; }));
+  for (const p of ps.processamento.soltas || []) ligacoes[p.chave] = { solta: true };
+  return { pr: { ctrls, ligacoes }, novo };
+}
+const saidaLivre = (pr, ctrlId, cap, menos) => { for (let i = 1; i <= cap; i++) if (!Object.entries(pr.ligacoes).some(([k, l]) => k !== menos && l.ctrl === ctrlId && l.saida === i)) return i; return null; };
+
+/* o painel do que está selecionado (porta, controladora ou nada) */
+function selecaoHtml(ctx, ps, sel) {
+  const { B, M } = ctx;
+  if (!sel) return '';
+  const nomeTela = ti => (ps.telas[ti] && ps.telas[ti].nome) || 'Tela';
+  const C = M.CONTROLADORAS, lista = ps.processamento.ctrls;
+  const fechar = `<button class="icon-btn sm pj-sel-x" title="Fechar" aria-label="Fechar">${B.ico('x')}</button>`;
+  if (sel.tipo === 'porta') {
+    const p = ps.processamento.portas.find(q => q.chave === sel.chave);
+    if (!p) return '';
+    const c = lista.find(q => q.saidas.some(x => x && x.chave === sel.chave));
+    const k = c ? c.saidas.findIndex(x => x && x.chave === sel.chave) : -1;
+    const solta = (ps.processamento.soltas || []).some(q => q.chave === sel.chave);
+    const opC = lista.map(q => `<option value="${B.esc(q.id)}" ${c && q.id === c.id ? 'selected' : ''}>${C[q.tipo].nome} ${q.n} · ${q.usadas}/${C[q.tipo].portas}</option>`).join('')
+      + `<option value="__solta" ${solta ? 'selected' : ''}>— solta (sem ligação) —</option>`
+      + Object.entries(C).map(([t, X]) => `<option value="__nova:${t}">+ Nova ${X.nome}</option>`).join('');
+    const cap = c ? C[c.tipo].portas : 0;
+    const opS = c ? Array.from({ length: cap }, (_, i) => { const q = c.saidas[i]; return `<option value="${i + 1}" ${i === k ? 'selected' : ''}>Saída ${i + 1}${q && q.chave !== sel.chave ? ' — ' + B.esc(nomeTela(q.ti)) + ' cabo ' + q.n : ''}</option>`; }).join('') : '';
+    return `<div class="pj-sel"><div class="pj-sel-t"><b>Cabo ${p.n} · ${B.esc(nomeTela(p.ti))}</b> <span class="mut2">${solta ? 'solto, sem ligação' : c ? 'ligado em ' + C[c.tipo].nome + ' ' + c.n + ', saída ' + (k + 1) : ''}</span>${fechar}</div>
+      <div class="grade g3 m1"><label class="campo"><span>Ligado em</span><select data-ps="ctrl">${opC}</select></label>
+      ${c ? `<label class="campo"><span>Saída</span><select data-ps="saida">${opS}</select></label>` : '<div></div>'}
+      <div class="pj-sel-b">${c ? `<button class="btn sm pj-tela-toda">Toda a ${B.esc(nomeTela(p.ti))} aqui</button>` : ''}${solta ? '' : '<button class="btn sm pj-soltar">Desligar</button>'}</div></div></div>`;
+  }
+  if (sel.tipo === 'ctrl') {
+    const c = lista.find(q => q.id === sel.id);
+    if (!c) return '';
+    const X = C[c.tipo];
+    return `<div class="pj-sel"><div class="pj-sel-t"><b>${X.nome} ${c.n}</b> <span class="mut2">${c.usadas} de ${X.portas} saídas</span>${fechar}</div>
+      <div class="grade g3 m1"><label class="campo"><span>Tipo</span><select data-ps="tipo">${Object.entries(C).map(([t, Y]) => `<option value="${t}" ${t === c.tipo ? 'selected' : ''}>${Y.nome} (${Y.portas} saídas)</option>`).join('')}</select></label>
+      <div class="pj-sel-b"><button class="btn sm pj-ctrl-soltar">Desligar os cabos dela</button><button class="btn sm pj-ctrl-tirar">Tirar</button></div></div></div>`;
+  }
+  return '';
+}
+
+function ligarPrancha(el, ctx, lista, id) {
+  const { B, M } = ctx;
   const caixa = el.querySelector('.pj-folha.pode');
+  const hist = historico.get(id) || { antes: [], depois: [] };
+  historico.set(id, hist);
+  // grava o projeto da sala (com histórico); recalc quando a ligação muda as controladoras da lista
+  const gravar = async (projeto, { recalc = false, sel } = {}) => {
+    hist.antes.push(JSON.stringify(lista.projeto || {}));
+    if (hist.antes.length > 60) hist.antes.shift();
+    hist.depois.length = 0;
+    if (sel !== undefined) { if (sel) selPrancha.set(id, sel); else selPrancha.delete(id); }
+    lista.projeto = projeto;
+    await ctx.D.salvar('listas', lista, { silencioso: true });
+    if (recalc) { const r = await recalcularLista(ctx, lista); if (r && r.pendente) B.toast('A separação já começou: confira as mudanças na lista (aviso amarelo).'); }
+    ctx.atualizar();
+  };
+  const voltar = async qual => {
+    const de = qual === 'desfazer' ? hist.antes : hist.depois, para = qual === 'desfazer' ? hist.depois : hist.antes;
+    if (!de.length) return B.toast(qual === 'desfazer' ? 'Nada para desfazer.' : 'Nada para refazer.');
+    para.push(JSON.stringify(lista.projeto || {}));
+    lista.projeto = JSON.parse(de.pop());
+    await ctx.D.salvar('listas', lista, { silencioso: true });
+    await recalcularLista(ctx, lista);
+    ctx.atualizar();
+  };
+  atalhoPrancha = caixa ? voltar : null;
+  const bt = (q, fn) => { const b = el.querySelector(q); if (b) b.onclick = fn; };
+  bt('.pj-desf', () => voltar('desfazer'));
+  bt('.pj-ref', () => voltar('refazer'));
   if (!caixa) return;
+
   const fs0 = folhasDaLista(ctx, lista, { hoje: ctx.hoje() });
   const fi = Math.min(folhaVista.get(id) || 0, Math.max(0, fs0.length - 1)), folha = fs0[fi];
   if (!folha) return;
+  const psAgora = () => M.planoSala(lista.telas || [], ctx.catIdx(), lista.projeto);
+  const proj = extra => Object.assign({}, lista.projeto || {}, extra);
+  // muda as ligações: a sugestão vira montagem da pessoa; os lugares e rótulos arrastados vão junto
+  const mudarProc = (fn, sel) => {
+    const ps = psAgora(), { pr, novo } = processamentoEditavel(ctx, ps);
+    if (fn(pr, novo) === false) return;
+    // a controladora que o sistema tinha sugerido e ficou sem cabo sai sozinha (a que a pessoa pôs fica)
+    pr.ctrls = pr.ctrls.filter(c => !c.sugerida || Object.values(pr.ligacoes).some(l => l.ctrl === c.id));
+    const layout = Cab.layoutRenomeado(ps, novo, (lista.projeto || {}).layout), textos = Cab.textosRenomeados(ps, novo, (lista.projeto || {}).textos);
+    return gravar(proj({ processamento: pr, layout, textos }), { recalc: true, sel: typeof sel === 'function' ? sel(novo) : sel });
+  };
+  const ligar = (chavePorta, ctrlId) => mudarProc((pr, novo) => {
+    const cid = novo(ctrlId), c = pr.ctrls.find(q => q.id === cid);
+    if (!c) return false;
+    const atual = pr.ligacoes[chavePorta];
+    if (atual && atual.ctrl === cid) return false;
+    const saida = saidaLivre(pr, cid, M.CONTROLADORAS[c.tipo].portas, chavePorta);
+    if (saida == null) { B.toast('Essa controladora está com as saídas cheias.'); return false; }
+    pr.ligacoes[chavePorta] = { ctrl: cid, saida };
+  }, { tipo: 'porta', chave: chavePorta });
+
+  // ---- arrastar (telas e aparelhos), ligar cabo (porta → controladora), tocar (selecionar / editar texto) ----
   const paraFolha = e => { const svg = caixa.querySelector('svg'), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
-  const comLayout = lay => Object.assign({}, lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: lay }) });
+  const comLayout = lay => Object.assign({}, lista, { projeto: proj({ layout: lay }) });
   let arr = null, quadro = 0;
   caixa.addEventListener('pointerdown', e => {
     const alvo = e.target.closest('[data-alvo]');
     if (!alvo || e.button > 0) return;
-    const p = paraFolha(e), x = +alvo.getAttribute('x'), y = +alvo.getAttribute('y'), w = +alvo.getAttribute('width');
-    const lay = JSON.parse(JSON.stringify((lista.projeto || {}).layout || {}));
-    arr = { chave: alvo.dataset.alvo, dx: p.x - (x + w / 2), dy: p.y - y, lay, mexeu: false };
+    const x = +alvo.getAttribute('x'), y = +alvo.getAttribute('y'), w = +alvo.getAttribute('width'), h = +alvo.getAttribute('height');
+    const p = paraFolha(e);
+    arr = { tipo: alvo.dataset.tipo, chave: alvo.dataset.alvo, id: alvo.dataset.id, p0: p, dx: p.x - (x + w / 2), dy: p.y - y, cx: x + w / 2, cy: y + h / 2, mexeu: false,
+      lay: JSON.parse(JSON.stringify((lista.projeto || {}).layout || {})) };
     caixa.setPointerCapture(e.pointerId);
-    caixa.classList.add('arrastando');
     e.preventDefault();
   });
   caixa.addEventListener('pointermove', e => {
     if (!arr) return;
-    const p = paraFolha(e), A = folha.area;
+    const p = paraFolha(e);
+    if (!arr.mexeu && Math.hypot(p.x - arr.p0.x, p.y - arr.p0.y) < 1.2) return;
+    arr.mexeu = true;
+    caixa.classList.add('arrastando');
+    if (arr.tipo === 'texto') return;
+    if (arr.tipo === 'porta') {
+      // o cabo novo seguindo o dedo; a controladora embaixo acende
+      const svg = caixa.querySelector('svg');
+      let fio = svg.querySelector('.pj-fio');
+      if (!fio) { fio = document.createElementNS('http://www.w3.org/2000/svg', 'line'); fio.setAttribute('class', 'pj-fio'); svg.appendChild(fio); }
+      fio.setAttribute('x1', arr.cx); fio.setAttribute('y1', arr.cy); fio.setAttribute('x2', p.x); fio.setAttribute('y2', p.y);
+      const sob = document.elementFromPoint(e.clientX, e.clientY), alvo = sob && sob.closest && sob.closest('[data-tipo="ctrl"]');
+      svg.querySelectorAll('.pj-alvo.on').forEach(a => { if (a !== alvo) a.classList.remove('on'); });
+      if (alvo) alvo.classList.add('on');
+      return;
+    }
+    const A = folha.area;
     arr.lay[folha.tipo] = Object.assign({}, arr.lay[folha.tipo], {
       [arr.chave]: { fx: +((p.x - arr.dx - A.x) / A.w).toFixed(4), fy: +((p.y - arr.dy - A.y) / A.h).toFixed(4) }
     });
-    arr.mexeu = true;
     if (!quadro) quadro = requestAnimationFrame(() => {
       quadro = 0;
-      if (!arr) return;
+      if (!arr || arr.tipo === 'porta') return;
       const tmp = comLayout(arr.lay), f = folhasDaLista(ctx, tmp, { hoje: ctx.hoje() })[fi];
-      if (f) caixa.innerHTML = svgDaFolha(ctx, tmp, f, { alvos: true });
+      if (f) caixa.innerHTML = svgDaFolha(ctx, tmp, f, { alvos: true, sel: selPrancha.get(id) });
     });
   });
-  const soltar = async () => {
+  const soltar = async e => {
     if (!arr) return;
     const a = arr;
     arr = null;
     caixa.classList.remove('arrastando');
-    if (!a.mexeu) return;
-    Object.assign(lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: a.lay }) });
-    await ctx.D.salvar('listas', lista, { silencioso: true });
-    ctx.atualizar();
+    if (!a.mexeu) {
+      // tocar: texto → escrever por cima; porta/controladora → selecionar
+      if (a.tipo === 'texto') return editarTexto(a.chave);
+      if (a.tipo === 'porta' || a.tipo === 'ctrl') { selPrancha.set(id, { tipo: a.tipo, chave: a.chave, id: a.id }); return ctx.atualizar(); }
+      return;
+    }
+    if (a.tipo === 'texto') return;
+    if (a.tipo === 'porta') {
+      const fio = caixa.querySelector('.pj-fio');
+      if (fio) fio.remove();
+      const sob = e && document.elementFromPoint(e.clientX, e.clientY), alvo = sob && sob.closest && sob.closest('[data-tipo="ctrl"]');
+      if (alvo) return ligar(a.chave, alvo.dataset.id);
+      return ctx.atualizar();
+    }
+    return gravar(proj({ layout: a.lay }));
   };
   caixa.addEventListener('pointerup', soltar);
-  caixa.addEventListener('pointercancel', soltar);
-  const auto = el.querySelector('.pj-lay-auto');
-  if (auto) auto.onclick = async () => {
-    const lay = Object.assign({}, (lista.projeto || {}).layout || {});
-    delete lay[folha.tipo];
-    Object.assign(lista, { projeto: Object.assign({}, lista.projeto || {}, { layout: lay }) });
-    await ctx.D.salvar('listas', lista, { silencioso: true });
-    ctx.atualizar();
+  caixa.addEventListener('pointercancel', () => soltar(null));
+
+  // ---- textos: escrever por cima (vazio = volta ao padrão) ----
+  const editarTexto = async chave => {
+    const a = (folha.alvos || []).find(x => x.tipo === 'texto' && x.chave === chave);
+    if (!a) return;
+    const v = await B.modal({
+      titulo: a.nome || 'Texto da prancha',
+      corpo: `<label class="campo"><span>Texto na folha</span><input class="f-txt" value="${B.esc(a.valor || '')}"></label>
+        <p class="dica" style="margin:6px 0 0">Padrão: <b>${B.esc(a.padrao || '—')}</b>. Deixe vazio para voltar ao padrão. Vale para todas as folhas desta sala.</p>`,
+      aoAbrir: m => { const i = m.querySelector('.f-txt'); i.focus(); i.select(); },
+      botoes: [{ txt: 'Padrão', valor: '' }, { txt: 'Cancelar', valor: null }, { txt: 'Salvar', cls: 'pri', valor: m => m.querySelector('.f-txt').value.trim() }]
+    });
+    if (v == null) return;
+    const textos = Object.assign({}, (lista.projeto || {}).textos || {});
+    if (v === '' || v === a.padrao) delete textos[chave]; else textos[chave] = v;
+    return gravar(proj({ textos }));
   };
+
+  // ---- barra: aparelho novo, lugares/ligações automáticas ----
+  el.querySelectorAll('.pj-novo').forEach(b => { b.onclick = () => {
+    const nid = ctx.novoId();
+    mudarProc(pr => { pr.ctrls.push({ id: nid, tipo: b.dataset.tipo }); }, { tipo: 'ctrl', id: nid });
+    B.toast('Aparelho posto na folha: arraste as bolinhas verdes das portas até ele.');
+  }; });
+  bt('.pj-lay-auto', () => { const lay = Object.assign({}, (lista.projeto || {}).layout || {}); delete lay[folha.tipo]; return gravar(proj({ layout: lay })); });
+  bt('.pj-lig-auto', () => gravar(proj({ processamento: null }), { recalc: true, sel: null }));
+  bt('.pj-txt-auto', () => gravar(proj({ textos: {} })));
+
+  // ---- painel da seleção ----
+  const sel = selPrancha.get(id);
+  bt('.pj-sel-x', () => { selPrancha.delete(id); ctx.atualizar(); });
+  el.querySelectorAll('[data-ps]').forEach(inp => inp.addEventListener('change', () => {
+    const v = inp.value, q = inp.dataset.ps;
+    if (q === 'ctrl' && sel) {
+      if (v === '__solta') return mudarProc(pr => { pr.ligacoes[sel.chave] = { solta: true }; }, sel);
+      if (v.startsWith('__nova:')) {
+        const nid = ctx.novoId();
+        return mudarProc(pr => { pr.ctrls.push({ id: nid, tipo: v.slice(7) }); pr.ligacoes[sel.chave] = { ctrl: nid, saida: 1 }; }, sel);
+      }
+      return ligar(sel.chave, v);
+    }
+    if (q === 'saida' && sel) return mudarProc(pr => {
+      const atual = pr.ligacoes[sel.chave];
+      if (!atual || atual.solta) return false;
+      const nova = +v, outra = Object.keys(pr.ligacoes).find(k => k !== sel.chave && pr.ligacoes[k].ctrl === atual.ctrl && pr.ligacoes[k].saida === nova);
+      if (outra) pr.ligacoes[outra] = { ctrl: atual.ctrl, saida: atual.saida };   // troca de lugar com o cabo que estava lá
+      pr.ligacoes[sel.chave] = { ctrl: atual.ctrl, saida: nova };
+    }, sel);
+    if (q === 'tipo' && sel) return mudarProc((pr, novo) => {
+      const cid = novo(sel.id), c = pr.ctrls.find(x => x.id === cid);
+      if (!c) return false;
+      c.tipo = v;
+      const cap = M.CONTROLADORAS[v].portas;
+      for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === cid && l.saida > cap) pr.ligacoes[k] = { solta: true };   // não cabe: fica solto
+    }, novo => ({ tipo: 'ctrl', id: novo(sel.id) }));
+  }));
+  bt('.pj-soltar', () => sel && mudarProc(pr => { pr.ligacoes[sel.chave] = { solta: true }; }, sel));
+  bt('.pj-tela-toda', () => sel && mudarProc(pr => {
+    const atual = pr.ligacoes[sel.chave];
+    if (!atual || atual.solta) return false;
+    const c = pr.ctrls.find(x => x.id === atual.ctrl), cap = M.CONTROLADORAS[c.tipo].portas;
+    const ti = sel.chave.slice(0, sel.chave.lastIndexOf(':'));
+    const daTela = psAgora().processamento.portas.filter(p => p.chave.slice(0, p.chave.lastIndexOf(':')) === ti && !p.estimada);
+    let faltou = 0;
+    for (const p of daTela) {
+      const l = pr.ligacoes[p.chave];
+      if (l && l.ctrl === c.id) continue;
+      const s = saidaLivre(pr, c.id, cap, p.chave);
+      if (s == null) { faltou++; continue; }
+      pr.ligacoes[p.chave] = { ctrl: c.id, saida: s };
+    }
+    if (faltou) B.toast(`Não coube tudo: ${faltou} cabo${faltou === 1 ? '' : 's'} ficou${faltou === 1 ? '' : 'ram'} onde estava${faltou === 1 ? '' : 'm'}.`);
+  }, sel));
+  bt('.pj-ctrl-soltar', () => sel && mudarProc((pr, novo) => {
+    const cid = novo(sel.id);
+    for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === cid) pr.ligacoes[k] = { solta: true };
+  }, novo => ({ tipo: 'ctrl', id: novo(sel.id) })));
+  bt('.pj-ctrl-tirar', () => sel && mudarProc((pr, novo) => {
+    const cid = novo(sel.id);
+    pr.ctrls = pr.ctrls.filter(c => c.id !== cid);
+    for (const [k, l] of Object.entries(pr.ligacoes)) if (l.ctrl === cid) pr.ligacoes[k] = { solta: true };
+  }, null));
 }
 
 export function render(ctx, [id]) {
@@ -172,9 +383,19 @@ export function render(ctx, [id]) {
 
   <div class="card"><h2>Folhas do PDF <span class="conta">${folhas.length}</span>
       <span class="dir">${folhas.map((f, i) => `<button class="btn sm folha-tab ${i === fi ? 'on' : ''}" data-i="${i}">${String(i + 1).padStart(2, '0')} · ${NOME_FOLHA[f.tipo]}</button>`).join(' ')}</span></h2>
-    ${folhas.length ? `<div class="proj-prev pj-folha ${pode ? 'pode' : ''}">${svgDaFolha(ctx, lista, folhas[fi], { alvos: pode })}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
-    ${pode && folhas.length && folhas[fi].alvos.length ? `<div class="pj-arraste peq mut2">${B.ico('info')} Arraste o rack, as controladoras e a processadora na folha para mudar o lugar deles — os cabos acompanham.
-      ${Object.keys((((lista.projeto || {}).layout) || {})[folhas[fi].tipo] || {}).length ? '<button class="btn sm pj-lay-auto">Voltar ao automático</button>' : ''}</div>` : ''}
+    ${pode && folhas.length ? (() => {
+      const f = folhas[fi], h = historico.get(id) || { antes: [], depois: [] }, pj = lista.projeto || {};
+      const temLay = Object.keys((pj.layout || {})[f.tipo] || {}).length, temTxt = Object.keys(pj.textos || {}).length, temLig = !!(pj.processamento && pj.processamento.ctrls);
+      return `<div class="pj-barra">
+        ${f.tipo !== 'ac' ? `<span class="peq mut2">Pôr:</span>${Object.entries(M.CONTROLADORAS).map(([t, C]) => `<button class="btn sm pj-novo" data-tipo="${t}">+ ${C.nome}</button>`).join('')}` : ''}
+        <span class="cresce"></span>
+        <button class="btn sm pj-desf" ${h.antes.length ? '' : 'disabled'} title="Desfazer (Ctrl+Z)">↶ Desfazer</button>
+        <button class="btn sm pj-ref" ${h.depois.length ? '' : 'disabled'} title="Refazer (Ctrl+Y)">↷ Refazer</button></div>`
+        + `<div class="proj-prev pj-folha pode">${svgDaFolha(ctx, lista, f, { alvos: true, sel: selPrancha.get(id) })}</div>`
+        + selecaoHtml(ctx, ps, selPrancha.get(id))
+        + `<div class="pj-arraste peq mut2">${B.ico('info')} <span class="cresce">Arraste telas e aparelhos para mudar o lugar · arraste a bolinha verde de uma porta até uma controladora/CVT para ligar o cabo · toque numa porta, num aparelho ou num texto para mudar.</span>
+          ${temLay ? '<button class="btn sm pj-lay-auto">Lugares automáticos</button>' : ''}${temLig ? '<button class="btn sm pj-lig-auto">Ligações automáticas</button>' : ''}${temTxt ? '<button class="btn sm pj-txt-auto">Textos padrão</button>' : ''}</div>`;
+    })() : folhas.length ? `<div class="proj-prev pj-folha">${svgDaFolha(ctx, lista, folhas[fi])}</div>` : '<p class="muted">Ponha uma tela com painel e medida (L × A) — o desenho aparece aqui.</p>'}
     <div class="pj-resumo">
       <span><b>${pl1(ps.portas, 'porta', 'portas')}</b></span><span><b>${pl1(ps.circuitos, 'circuito', 'circuitos')}</b></span>
       <span><b>${pl1(ps.reguas, 'régua', 'réguas')}</b></span><span><b>${racksTxt}</b>${ps.racks.length && sc.racks !== 'tela' && ps.telas.length > 1 ? ' (da sala)' : ''}</span>
@@ -222,7 +443,7 @@ export function ligar(el, ctx, [id]) {
     } catch (e) { B.toast(e.message, { tipo: 'erro' }); }
   };
   el.querySelectorAll('.folha-tab').forEach(b => { b.onclick = () => { folhaVista.set(id, +b.dataset.i); ctx.atualizar(); }; });
-  ligarArraste(el, ctx, lista, id);
+  ligarPrancha(el, ctx, lista, id);
 
   const pode = editavel(lista) && ctx.pode('listas');
   // a lista acompanha o projeto: sem nada separado, recalcula sozinha (regras novas, catálogo)

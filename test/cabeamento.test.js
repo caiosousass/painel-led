@@ -180,8 +180,11 @@ test('prancha: aparelhos arrastados ficam onde o usuário pôs (frações da ár
   const telas = [{ id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3 }];
   const auto = Cab.folhasTecnicas(M.planoSala(telas, cat, { processadora: 'H9', folhas: 'separadas' }), { sala: 'S' }, {});
   const sinal = auto.find(f => f.tipo === 'sinal');
-  assert.deepEqual(sinal.alvos.map(a => a.chave), ['ctrl:c:1', 'proc']);
-  assert.ok(auto.find(f => f.tipo === 'ac').alvos.every(a => a.chave.startsWith('rack:')));
+  const tipos = f => [...new Set(f.alvos.map(a => a.tipo))].sort().join(',');
+  assert.deepEqual(sinal.alvos.filter(a => a.tipo === 'ctrl' || a.tipo === 'proc').map(a => a.chave), ['ctrl:c:1', 'proc']);
+  assert.equal(tipos(sinal), 'ctrl,porta,proc,tela,texto');                 // telas, cabos (portas), aparelhos e textos
+  assert.equal(tipos(auto.find(f => f.tipo === 'ac')), 'rack,tela,texto');
+  assert.deepEqual(sinal.alvos.filter(a => a.tipo === 'porta').map(a => a.chave), ['c:1', 'c:2', 'c:3', 'c:4']);
   const layout = { sinal: { proc: { fx: 0.1, fy: 0.75 } } };
   const mov = Cab.folhasTecnicas(M.planoSala(telas, cat, { processadora: 'H9', folhas: 'separadas', layout }), { sala: 'S' }, {}).find(f => f.tipo === 'sinal');
   const p = mov.alvos.find(a => a.chave === 'proc'), A = mov.area;
@@ -192,4 +195,27 @@ test('prancha: aparelhos arrastados ficam onde o usuário pôs (frações da ár
   assert.ok(fora.x + fora.w <= A.x + A.w + 0.01 && fora.y + fora.h <= A.y + A.h + 0.01);
   // a controladora não mexida continua no automático
   assert.deepEqual(mov.alvos.find(a => a.chave === 'ctrl:c:1'), sinal.alvos.find(a => a.chave === 'ctrl:c:1'));
+});
+
+test('prancha editável: porta solta, textos por cima e tela arrastada', () => {
+  const cat = catalogoInicial();
+  const telas = [{ id: 'c', nome: 'Central', painel: 'led-v10', modo: 'medida', largura_m: 6, altura_m: 3 }];
+  // porta 2 desligada de propósito: não vai para a automática e aparece "solta"
+  const ps = M.planoSala(telas, cat, { processadora: 'H9', processamento: { ctrls: [{ id: 'k1', tipo: 'cvt10' }], ligacoes: { 'c:1': { ctrl: 'k1', saida: 1 }, 'c:2': { solta: true } } } });
+  assert.deepEqual(ps.processamento.soltas.map(p => p.chave), ['c:2']);
+  assert.deepEqual(ps.processamento.ctrls.map(c => c.tipo + ':' + c.saidas.filter(Boolean).map(p => p.n).join('')), ['cvt10:1', 'send-660:34']);
+  const sinal = Cab.folhasTecnicas(ps, { sala: 'Plenária', cliente: 'Syngenta' }, { folhas: 'separadas' }).find(f => f.tipo === 'sinal');
+  assert.ok(sinal.prims.some(p => p.t === 'text' && p.txt === 'solta'));
+  // textos: o padrão vem da lista; o escrito por cima vale (vazio volta ao padrão)
+  const txt = f => f.prims.filter(p => p.t === 'text').map(p => p.txt);
+  assert.ok(txt(sinal).includes('Syngenta') && txt(sinal).includes('Cabeamento de Sinal · Plenária'));
+  const ps2 = M.planoSala(telas, cat, { processadora: 'H9', textos: { cliente: 'Syngenta Brasil', 'titulo:sinal': 'Sinal — Plenária A', projeto: '  ' } });
+  const s2 = Cab.folhasTecnicas(ps2, { sala: 'Plenária', cliente: 'Syngenta', projeto: 'Red Coop' }, { folhas: 'separadas' }).find(f => f.tipo === 'sinal');
+  assert.ok(txt(s2).includes('Syngenta Brasil') && txt(s2).includes('Sinal — Plenária A') && txt(s2).includes('Red Coop'));
+  assert.ok(s2.alvos.some(a => a.tipo === 'texto' && a.chave === 'cliente' && a.padrao === 'Syngenta' && a.valor === 'Syngenta Brasil'));
+  // tela arrastada: fica onde foi posta
+  const ps3 = M.planoSala(telas, cat, { processadora: 'H9', layout: { sinal: { 'tela:c': { fx: 0.5, fy: 0.05 } } } });
+  const s3 = Cab.folhasTecnicas(ps3, { sala: 'S' }, { folhas: 'separadas' }).find(f => f.tipo === 'sinal');
+  const t3 = s3.alvos.find(a => a.tipo === 'tela'), A = s3.area;
+  assert.ok(Math.abs(t3.x + t3.w / 2 - (A.x + 0.5 * A.w)) < 0.01 && Math.abs(t3.y - (A.y + 0.05 * A.h)) < 0.01);
 });
